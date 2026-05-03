@@ -1,8 +1,31 @@
 # AndroidBridge
 
-AndroidBridge is a small free macOS app for transferring files between a Mac and an Android phone over USB using ADB.
+AndroidBridge is a small, free, native macOS app for transferring files between a Mac and an Android phone over USB using ADB.
 
 It is intentionally simple: connect a phone, browse `/sdcard/Download`, download files to the Mac, and upload files back to the current Android folder.
+
+![AndroidBridge screenshot](assets/androidbridge-screenshot.png)
+
+## Install
+
+### Homebrew
+
+```bash
+brew tap togiwan/tap
+brew install --cask androidbridge
+```
+
+AndroidBridge also needs Android SDK Platform-Tools:
+
+```bash
+brew install android-platform-tools
+```
+
+### Manual Download
+
+Download the latest DMG from the [GitHub Releases](https://github.com/togiwan/AndroidBridge/releases/latest) page, open it, and copy `AndroidBridge.app` to Applications.
+
+This free release is ad-hoc signed but not notarized. If macOS blocks the first launch, right-click `AndroidBridge.app` and choose Open.
 
 ## Features
 
@@ -10,6 +33,7 @@ It is intentionally simple: connect a phone, browse `/sdcard/Download`, download
 - Browses Android folders through ADB
 - Downloads files and folders to the Mac Downloads folder
 - Uploads Mac files to the current Android folder
+- Opens Android files through a temporary local preview
 - Shows download progress and estimated time for files
 - Includes an in-app setup guide for Android Platform-Tools and USB debugging
 - Optional donation sheet with copyable wallet address
