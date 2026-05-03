@@ -36,7 +36,7 @@ struct SetupGuideView: View {
                 Text("AndroidBridge Setup Guide")
                     .font(.title3.weight(.semibold))
 
-                Text("ADB kurulumu, USB debugging ve ilk bağlantı adımları")
+                Text("ADB installation, USB debugging, and first connection steps")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -54,10 +54,10 @@ struct SetupGuideView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Bu uygulama nasıl çalışır?")
+            Text("How does this app work?")
                 .font(.headline)
 
-            Text("AndroidBridge telefonun içindeki dosyalara MTP yerine ADB ile erişir. Bu yüzden Mac'te Android Platform-Tools kurulu olmalı, telefonda USB debugging açık olmalı ve ilk bağlantıda telefondaki güven penceresi onaylanmalıdır.")
+            Text("AndroidBridge uses ADB instead of MTP to access files on your Android phone. That means Android Platform-Tools must be installed on the Mac, USB debugging must be enabled on the phone, and the trust prompt must be approved during the first connection.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 

@@ -35,87 +35,87 @@ public enum AndroidBridgeSetupGuide {
     public static let sections: [SetupGuideSection] = [
         SetupGuideSection(
             id: "platform-tools",
-            title: "1. Mac'e Android Platform-Tools kur",
-            body: "AndroidBridge, telefona ADB ile erişir. ADB, Google'ın Android SDK Platform-Tools paketinin içindedir.",
+            title: "1. Install Android Platform-Tools on your Mac",
+            body: "AndroidBridge connects to your phone through ADB. ADB is included in Google's Android SDK Platform-Tools package.",
             steps: [
                 SetupGuideStep(
                     id: "homebrew",
-                    title: "Kolay yol: Homebrew ile kur",
-                    body: "Terminal'i aç ve şu komutu çalıştır. Kurulum bittikten sonra AndroidBridge'i yeniden aç.",
+                    title: "Recommended: install with Homebrew",
+                    body: "Open Terminal and run this command. After installation finishes, reopen AndroidBridge.",
                     command: "brew install android-platform-tools"
                 ),
                 SetupGuideStep(
                     id: "official-zip",
-                    title: "Alternatif yol: Google'ın resmi zip dosyası",
-                    body: "Android SDK Platform-Tools for Mac paketini indir, zip'i aç ve çıkan platform-tools klasörünü sakla. Sonra Terminal'de o klasöre gidip ./adb devices ile test edebilirsin."
+                    title: "Alternative: use Google's official zip",
+                    body: "Download Android SDK Platform-Tools for Mac, unzip it, and keep the extracted platform-tools folder somewhere safe. You can test it from Terminal by going into that folder and running ./adb devices."
                 ),
                 SetupGuideStep(
                     id: "verify-adb",
-                    title: "Kurulumu kontrol et",
-                    body: "Terminal'de adb version veya adb devices yaz. Komut bulunamıyorsa platform-tools PATH'e eklenmemiştir.",
+                    title: "Verify the installation",
+                    body: "Run adb version or adb devices in Terminal. If the command is not found, Platform-Tools is not available in your PATH.",
                     command: "adb devices"
                 )
             ]
         ),
         SetupGuideSection(
             id: "phone-debugging",
-            title: "2. Telefonda USB debugging aç",
-            body: "Android'de USB debugging, Mac'in telefonla ADB üzerinden konuşmasına izin verir. Telefon kilidi açıkken yapılmalıdır.",
+            title: "2. Enable USB debugging on the phone",
+            body: "USB debugging allows your Mac to communicate with the Android phone through ADB. Do this while the phone is unlocked.",
             steps: [
                 SetupGuideStep(
                     id: "developer-options",
-                    title: "Developer Options'ı görünür yap",
-                    body: "Telefonda Settings > About phone bölümüne gir. Build number satırına genelde 7 kez dokun. PIN istenirse gir; ekranda artık geliştirici olduğuna dair mesaj çıkar."
+                    title: "Enable Developer Options",
+                    body: "On the phone, open Settings > About phone. Tap Build number several times, usually 7 times. Enter your PIN if asked. Android should show a message saying developer options are enabled."
                 ),
                 SetupGuideStep(
                     id: "enable-usb-debugging",
-                    title: "USB debugging'i aç",
-                    body: "Settings içinde Developer Options bölümünü aç. Android sürümüne göre System > Advanced > Developer Options altında olabilir. USB debugging anahtarını aç."
+                    title: "Turn on USB debugging",
+                    body: "Open Developer Options in Settings. Depending on your Android version, it may be under System > Advanced > Developer Options. Turn on the USB debugging switch."
                 ),
                 SetupGuideStep(
                     id: "security-note",
-                    title: "Güvenlik notu",
-                    body: "USB debugging'i sadece güvendiğin Mac'lerde kullan. İşin bitince Developer Options içinden kapatabilirsin."
+                    title: "Security note",
+                    body: "Only enable USB debugging for computers you trust. You can turn it off again from Developer Options when you are done."
                 )
             ]
         ),
         SetupGuideSection(
             id: "connect",
-            title: "3. Telefonu bağla ve izin ver",
-            body: "İlk bağlantıda telefon Mac'i yetkilendirmek için güven penceresi gösterir.",
+            title: "3. Connect the phone and approve access",
+            body: "The first time you connect, Android asks whether this Mac should be allowed to debug the phone.",
             steps: [
                 SetupGuideStep(
                     id: "cable",
-                    title: "Veri aktarabilen USB kablosu kullan",
-                    body: "Bazı kablolar sadece şarj eder. Telefon görünmüyorsa farklı bir kablo veya port dene."
+                    title: "Use a USB cable that supports data",
+                    body: "Some USB cables only charge. If the phone does not appear, try a different cable or USB port."
                 ),
                 SetupGuideStep(
                     id: "rsa",
-                    title: "RSA güven penceresini onayla",
-                    body: "Telefon kilidini aç. 'Allow USB debugging?' veya RSA fingerprint penceresi gelirse Allow seç. Kendi Mac'inse 'Always allow from this computer' işaretlenebilir."
+                    title: "Approve the RSA trust prompt",
+                    body: "Unlock the phone. If you see an 'Allow USB debugging?' or RSA fingerprint prompt, choose Allow. On your own Mac, you can also check 'Always allow from this computer'."
                 ),
                 SetupGuideStep(
                     id: "check-state",
-                    title: "Bağlantıyı doğrula",
-                    body: "Terminal'de adb devices çalıştır. Satırın sonunda device yazıyorsa hazır. unauthorized yazıyorsa telefondaki izin penceresini onayla. offline yazıyorsa kabloyu çıkarıp tak veya telefonu yeniden başlat.",
+                    title: "Check the connection",
+                    body: "Run adb devices in Terminal. If the device line ends with device, it is ready. If it says unauthorized, approve the prompt on the phone. If it says offline, unplug and reconnect the cable or restart the phone.",
                     command: "adb devices"
                 )
             ]
         ),
         SetupGuideSection(
             id: "use-app",
-            title: "4. AndroidBridge ile dosya aktar",
-            body: "Cihaz hazır olduğunda AndroidBridge'de Refresh Devices'a bas. Uygulama varsayılan olarak /sdcard/Download klasörünü açar.",
+            title: "4. Transfer files with AndroidBridge",
+            body: "When the device is ready, click Refresh Devices in AndroidBridge. The app opens /sdcard/Download by default.",
             steps: [
                 SetupGuideStep(
                     id: "download",
-                    title: "Telefondan Mac'e indir",
-                    body: "Telefondaki dosyayı seç ve Download'a bas. Dosya Mac'teki Downloads klasörüne iner."
+                    title: "Download from Android to Mac",
+                    body: "Select a file on the phone and click Download. The file is saved to the Mac Downloads folder."
                 ),
                 SetupGuideStep(
                     id: "upload",
-                    title: "Mac'ten telefona gönder",
-                    body: "Telefonda hedef klasöre gir, Upload'a bas ve Mac'ten bir dosya seç. Dosya açık olan Android klasörüne gönderilir."
+                    title: "Upload from Mac to Android",
+                    body: "Open the target folder on the phone, click Upload, and choose a file from your Mac. The file is sent to the currently open Android folder."
                 )
             ]
         )
