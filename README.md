@@ -71,6 +71,20 @@ ditto dist/AndroidBridge.app /Applications/AndroidBridge.app
 
 Then open AndroidBridge from Finder, Spotlight, or Launchpad.
 
+## Package A Release DMG
+
+```bash
+./script/package_dmg.sh
+```
+
+The script creates `dist/AndroidBridge.dmg` and prints its SHA256 checksum for Homebrew Cask.
+
+This free release is ad-hoc signed but not notarized. If macOS blocks the first launch, right-click `AndroidBridge.app` and choose Open. If macOS says the app is damaged after downloading from a browser, remove the quarantine attribute:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/AndroidBridge.app
+```
+
 ## Donation
 
 AndroidBridge is free. Donations are optional.
