@@ -32,7 +32,7 @@ This free release is ad-hoc signed but not notarized. If macOS blocks the first 
 - Lists Android devices connected over USB
 - Browses Android folders through ADB
 - Downloads files and folders to the Mac Downloads folder
-- Uploads Mac files to the current Android folder
+- Uploads Mac files or folders to the current Android folder
 - Opens Android files through a temporary local preview
 - Shows download progress and estimated time for files
 - Includes an in-app setup guide for Android Platform-Tools and USB debugging

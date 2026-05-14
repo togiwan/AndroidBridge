@@ -115,7 +115,7 @@ public enum AndroidBridgeSetupGuide {
                 SetupGuideStep(
                     id: "upload",
                     title: "Upload from Mac to Android",
-                    body: "Open the target folder on the phone, click Upload, and choose a file from your Mac. The file is sent to the currently open Android folder."
+                    body: "Open the target folder on the phone, click Upload, and choose a file or folder from your Mac. The selected item is sent to the currently open Android folder."
                 )
             ]
         )

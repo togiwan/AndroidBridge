@@ -124,17 +124,17 @@ final class AndroidBridgeStore {
             return
         }
 
-        guard let fileURL = pickFile() else {
+        guard let itemURL = pickUploadItem() else {
             return
         }
 
-        await runBusy("Uploading \(fileURL.lastPathComponent)...") {
+        await runBusy("Uploading \(itemURL.lastPathComponent)...") {
             transferProgress = nil
-            transferDetailMessage = "Uploading \(fileURL.lastPathComponent)..."
-            try await client.push(deviceID: selectedDeviceID, localURL: fileURL, to: currentPath)
+            transferDetailMessage = "Uploading \(itemURL.lastPathComponent)..."
+            try await client.push(deviceID: selectedDeviceID, localURL: itemURL, to: currentPath)
             try await loadFiles()
             transferDetailMessage = nil
-            statusMessage = "Uploaded \(fileURL.lastPathComponent) to \(currentPath)."
+            statusMessage = "Uploaded \(itemURL.lastPathComponent) to \(currentPath)."
         }
     }
 
@@ -203,11 +203,13 @@ final class AndroidBridgeStore {
         transferDetailMessage = nil
     }
 
-    private func pickFile() -> URL? {
+    private func pickUploadItem() -> URL? {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.canChooseFiles = true
+        panel.message = "Choose a file or folder to upload to the current Android folder."
+        panel.prompt = "Upload"
 
         return panel.runModal() == .OK ? panel.url : nil
     }

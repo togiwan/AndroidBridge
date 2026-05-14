@@ -141,6 +141,7 @@ struct FileBrowserView: View {
             } label: {
                 Label("Upload", systemImage: "square.and.arrow.up")
             }
+            .help("Upload a file or folder to Android")
             .disabled(store.isBusy || store.selectedDevice == nil)
 
             Button {
