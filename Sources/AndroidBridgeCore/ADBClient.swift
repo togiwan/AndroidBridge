@@ -50,15 +50,35 @@ public struct ADBClient: Sendable {
         }
     }
 
-    public func push(deviceID: String, localURL: URL, to remoteFolder: String) async throws {
-        _ = try await runADB(arguments: ["-s", deviceID, "push", localURL.path, remoteFolder])
+    public func push(
+        deviceID: String,
+        localURL: URL,
+        to remoteFolder: String,
+        onProgress: (@Sendable (ADBTransferProgress) -> Void)? = nil
+    ) async throws {
+        let arguments = ["-s", deviceID, "push", localURL.path, remoteFolder]
+
+        if let onProgress {
+            _ = try await runADBStreaming(arguments: arguments) { text in
+                guard let progress = ADBTransferProgressParser.parse(text) else {
+                    return
+                }
+
+                onProgress(progress)
+            }
+        } else {
+            _ = try await runADB(arguments: arguments)
+        }
     }
 
     private func runADB(arguments: [String]) async throws -> ProcessResult {
         let result = try await runner.run(command.executable, arguments: command.leadingArguments + arguments)
 
         guard result.exitCode == 0 else {
-            let message = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = helpfulErrorMessage(
+                for: result.stderr.trimmingCharacters(in: .whitespacesAndNewlines),
+                exitCode: result.exitCode
+            )
             throw ADBClientError.commandFailed(message.isEmpty ? "adb exited with code \(result.exitCode)" : message)
         }
 
@@ -72,10 +92,39 @@ public struct ADBClient: Sendable {
         let result = try await runner.runStreaming(command.executable, arguments: command.leadingArguments + arguments, onOutput: onOutput)
 
         guard result.exitCode == 0 else {
-            let message = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = helpfulErrorMessage(
+                for: result.stderr.trimmingCharacters(in: .whitespacesAndNewlines),
+                exitCode: result.exitCode
+            )
             throw ADBClientError.commandFailed(message.isEmpty ? "adb exited with code \(result.exitCode)" : message)
         }
 
         return result
+    }
+
+    private func helpfulErrorMessage(for stderr: String, exitCode: Int32) -> String {
+        let lowercasedStderr = stderr.lowercased()
+
+        if lowercasedStderr.contains("device unauthorized") || lowercasedStderr.contains("unauthorized") {
+            return "This phone is not authorized yet. Unlock it, approve the USB debugging RSA prompt, then refresh devices."
+        }
+
+        if lowercasedStderr.contains("device offline") || lowercasedStderr.contains("offline") {
+            return "This phone is offline. Reconnect the USB cable, unlock the phone, then refresh devices."
+        }
+
+        if lowercasedStderr.contains("no devices") || lowercasedStderr.contains("device not found") {
+            return "No Android device is available. Connect a phone by USB, enable USB debugging, then refresh devices."
+        }
+
+        if lowercasedStderr.contains("permission denied") {
+            return "Android denied access to this path. Choose another folder or allow file access on the phone."
+        }
+
+        if lowercasedStderr.contains("no such file") {
+            return "That Android file or folder no longer exists. Refresh the folder and try again."
+        }
+
+        return stderr.isEmpty ? "adb exited with code \(exitCode)" : stderr
     }
 }

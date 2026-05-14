@@ -10,7 +10,7 @@ final class AndroidBridgeStore {
     var selectedDeviceID: AndroidDevice.ID?
     var currentPath = "/sdcard/Download"
     var files: [AndroidFileItem] = []
-    var selectedItemID: AndroidFileItem.ID?
+    var selectedItemIDs: Set<AndroidFileItem.ID> = []
     var isBusy = false
     var statusMessage = "Connect an Android phone with USB debugging enabled."
     var transferProgress: Double?
@@ -19,6 +19,8 @@ final class AndroidBridgeStore {
     var isShowingDonation = false
 
     private let client: ADBClient
+    private var activeOperationTask: Task<Void, Error>?
+    private var lastDownloadDirectory: URL?
 
     init(client: ADBClient = ADBClient()) {
         self.client = client
@@ -29,7 +31,15 @@ final class AndroidBridgeStore {
     }
 
     var selectedItem: AndroidFileItem? {
-        files.first { $0.id == selectedItemID }
+        guard selectedItemIDs.count == 1, let selectedItemID = selectedItemIDs.first else {
+            return nil
+        }
+
+        return files.first { $0.id == selectedItemID }
+    }
+
+    var selectedItems: [AndroidFileItem] {
+        files.filter { selectedItemIDs.contains($0.id) }
     }
 
     var connectedDevices: [AndroidDevice] {
@@ -37,7 +47,7 @@ final class AndroidBridgeStore {
     }
 
     func refreshDevices() async {
-        await runBusy("Refreshing devices...") {
+        await runBusy("Refreshing devices...") { [self] in
             let loadedDevices = try await client.listDevices()
             devices = loadedDevices
 
@@ -58,7 +68,7 @@ final class AndroidBridgeStore {
     }
 
     func open(_ item: AndroidFileItem) async {
-        selectedItemID = item.id
+        selectedItemIDs = [item.id]
 
         guard item.kind == .folder else {
             await preview(item)
@@ -75,46 +85,82 @@ final class AndroidBridgeStore {
     }
 
     func refreshFiles() async {
-        await runBusy("Loading \(currentPath)...") {
+        await runBusy("Loading \(currentPath)...") { [self] in
             try await loadFiles()
         }
     }
 
+    func cancelCurrentOperation() {
+        guard isBusy else {
+            return
+        }
+
+        transferDetailMessage = "Cancelling..."
+        statusMessage = "Cancelling..."
+        activeOperationTask?.cancel()
+    }
+
     func downloadSelected() async {
-        guard let selectedDeviceID, let selectedItem else {
-            statusMessage = "Select a file or folder to download."
+        guard let selectedDeviceID, !selectedItems.isEmpty else {
+            statusMessage = "Select one or more files or folders to download."
             return
         }
 
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-        guard let downloads else {
-            statusMessage = "Could not find your Downloads folder."
+        let itemsToDownload = selectedItems
+
+        guard let downloadDirectory = pickDownloadDirectory() else {
             return
         }
 
-        await runBusy("Downloading \(selectedItem.name)...") {
-            let startedAt = Date()
-            transferProgress = selectedItem.kind == .file && selectedItem.size > 0 ? 0 : nil
-            updateTransferDetail(for: selectedItem.name, progress: nil, estimate: nil, startedAt: startedAt)
+        lastDownloadDirectory = downloadDirectory
 
-            let monitorTask = startLocalTransferMonitor(
-                for: selectedItem,
-                localFileURL: downloads.appendingPathComponent(selectedItem.name),
-                startedAt: startedAt
-            )
-            defer {
-                monitorTask?.cancel()
-            }
+        guard FileManager.default.fileExists(atPath: downloadDirectory.path) else {
+            statusMessage = "Could not find the selected download folder."
+            return
+        }
 
-            try await client.pull(deviceID: selectedDeviceID, remotePath: selectedItem.path, to: downloads) { progress in
-                Task { @MainActor in
-                    self.updateTransferDetail(for: selectedItem.name, progress: progress, estimate: nil, startedAt: startedAt)
+        let downloadTitle = AndroidSelectionSummary.downloadTitle(for: itemsToDownload)
+
+        await runBusy("Downloading \(downloadTitle)...") { [self] in
+            for (index, item) in itemsToDownload.enumerated() {
+                let destination = LocalDownloadDestination.destination(
+                    for: item,
+                    downloadDirectory: downloadDirectory
+                )
+                let startedAt = Date()
+                let displayName = AndroidSelectionSummary.progressTitle(
+                    for: item,
+                    index: index,
+                    totalCount: itemsToDownload.count
+                )
+
+                transferProgress = item.kind == .file && item.size > 0 ? 0 : nil
+                updateTransferDetail(for: displayName, progress: nil, estimate: nil, startedAt: startedAt)
+
+                let monitorTask = startLocalTransferMonitor(
+                    for: item,
+                    displayName: displayName,
+                    localFileURL: destination.file,
+                    startedAt: startedAt
+                )
+                defer {
+                    monitorTask?.cancel()
+                }
+
+                try Task.checkCancellation()
+                try await client.pull(deviceID: selectedDeviceID, remotePath: item.path, to: destination.directory) { progress in
+                    Task { @MainActor in
+                        self.updateTransferDetail(for: displayName, progress: progress, estimate: nil, startedAt: startedAt)
+                    }
                 }
             }
 
             transferProgress = 1
             transferDetailMessage = nil
-            statusMessage = "Downloaded \(selectedItem.name) to Downloads."
+            statusMessage = AndroidSelectionSummary.completedMessage(
+                for: itemsToDownload,
+                directoryName: downloadDirectory.lastPathComponent
+            )
         }
     }
 
@@ -124,17 +170,42 @@ final class AndroidBridgeStore {
             return
         }
 
-        guard let itemURL = pickUploadItem() else {
+        let itemURLs = pickUploadItems()
+        guard !itemURLs.isEmpty else {
             return
         }
 
-        await runBusy("Uploading \(itemURL.lastPathComponent)...") {
-            transferProgress = nil
-            transferDetailMessage = "Uploading \(itemURL.lastPathComponent)..."
-            try await client.push(deviceID: selectedDeviceID, localURL: itemURL, to: currentPath)
+        let uploadTitle = LocalUploadSelectionSummary.uploadTitle(for: itemURLs)
+
+        await runBusy("Uploading \(uploadTitle)...") { [self] in
+            for (index, itemURL) in itemURLs.enumerated() {
+                let startedAt = Date()
+                let displayName = LocalUploadSelectionSummary.progressTitle(
+                    for: itemURL,
+                    index: index,
+                    totalCount: itemURLs.count
+                )
+
+                transferProgress = 0
+                updateTransferDetail(for: displayName, verb: "Uploading", progress: nil, estimate: nil, startedAt: startedAt)
+
+                try Task.checkCancellation()
+                try await client.push(deviceID: selectedDeviceID, localURL: itemURL, to: currentPath) { progress in
+                    Task { @MainActor in
+                        self.updateTransferDetail(
+                            for: displayName,
+                            verb: "Uploading",
+                            progress: progress,
+                            estimate: nil,
+                            startedAt: startedAt
+                        )
+                    }
+                }
+            }
+
             try await loadFiles()
             transferDetailMessage = nil
-            statusMessage = "Uploaded \(itemURL.lastPathComponent) to \(currentPath)."
+            statusMessage = LocalUploadSelectionSummary.completedMessage(for: itemURLs, remotePath: currentPath)
         }
     }
 
@@ -146,7 +217,7 @@ final class AndroidBridgeStore {
 
         let destination = LocalPreviewDestination.destination(for: item)
 
-        await runBusy("Opening \(item.name)...") {
+        await runBusy("Opening \(item.name)...") { [self] in
             try FileManager.default.createDirectory(
                 at: destination.directory,
                 withIntermediateDirectories: true
@@ -158,6 +229,7 @@ final class AndroidBridgeStore {
 
             let monitorTask = startLocalTransferMonitor(
                 for: item,
+                displayName: item.name,
                 localFileURL: destination.file,
                 startedAt: startedAt
             )
@@ -184,38 +256,63 @@ final class AndroidBridgeStore {
         }
 
         files = try await client.listFiles(deviceID: selectedDeviceID, path: currentPath)
-        selectedItemID = nil
+        selectedItemIDs = []
         statusMessage = files.isEmpty ? "Folder is empty." : "Showing \(currentPath)."
     }
 
-    private func runBusy(_ message: String, operation: () async throws -> Void) async {
+    private func runBusy(_ message: String, operation: @escaping () async throws -> Void) async {
         isBusy = true
         statusMessage = message
 
-        do {
+        let task = Task {
             try await operation()
+        }
+        activeOperationTask = task
+
+        do {
+            try await task.value
+        } catch is CancellationError {
+            statusMessage = "Operation cancelled."
         } catch {
             statusMessage = error.localizedDescription
         }
 
+        activeOperationTask = nil
         isBusy = false
         transferProgress = nil
         transferDetailMessage = nil
     }
 
-    private func pickUploadItem() -> URL? {
+    private func pickUploadItems() -> [URL] {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.message = "Choose files or folders to upload to the current Android folder."
+        panel.prompt = "Upload"
+
+        return panel.runModal() == .OK ? panel.urls : []
+    }
+
+    private func pickDownloadDirectory() -> URL? {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-        panel.message = "Choose a file or folder to upload to the current Android folder."
-        panel.prompt = "Upload"
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.message = "Choose where to save the selected Android items."
+        panel.prompt = "Download Here"
+        panel.directoryURL = lastDownloadDirectory ?? FileManager.default.urls(
+            for: .downloadsDirectory,
+            in: .userDomainMask
+        ).first
 
         return panel.runModal() == .OK ? panel.url : nil
     }
 
     private func startLocalTransferMonitor(
         for item: AndroidFileItem,
+        displayName: String,
         localFileURL: URL,
         startedAt: Date
     ) -> Task<Void, Never>? {
@@ -226,7 +323,7 @@ final class AndroidBridgeStore {
         return Task { [weak self] in
             while !Task.isCancelled {
                 self?.updateTransferDetailFromLocalFile(
-                    named: item.name,
+                    named: displayName,
                     localFileURL: localFileURL,
                     totalBytes: item.size,
                     startedAt: startedAt
@@ -264,6 +361,7 @@ final class AndroidBridgeStore {
 
     private func updateTransferDetail(
         for fileName: String,
+        verb: String = "Downloading",
         progress: ADBTransferProgress?,
         estimate: TransferProgressEstimate?,
         startedAt: Date
@@ -274,7 +372,7 @@ final class AndroidBridgeStore {
             transferProgress = estimate.fraction
 
             if let remainingSeconds = estimate.remainingSeconds {
-                transferDetailMessage = "Downloading \(fileName) - \(estimate.percent)% - about \(formatDuration(TimeInterval(remainingSeconds))) left"
+                transferDetailMessage = "\(verb) \(fileName) - \(estimate.percent)% - about \(formatDuration(TimeInterval(remainingSeconds))) left"
             } else {
                 transferDetailMessage = "Finishing \(fileName)..."
             }
@@ -286,7 +384,7 @@ final class AndroidBridgeStore {
             if transferProgress == nil {
                 transferProgress = nil
             }
-            transferDetailMessage = "Downloading \(fileName) - \(formatDuration(elapsed)) elapsed"
+            transferDetailMessage = "\(verb) \(fileName) - \(formatDuration(elapsed)) elapsed"
             return
         }
 
@@ -296,11 +394,11 @@ final class AndroidBridgeStore {
         if progress.percent > 0 && progress.percent < 100 {
             let estimatedTotal = elapsed / fraction
             let remaining = max(0, estimatedTotal - elapsed)
-            transferDetailMessage = "Downloading \(fileName) - \(progress.percent)% - about \(formatDuration(remaining)) left"
+            transferDetailMessage = "\(verb) \(fileName) - \(progress.percent)% - about \(formatDuration(remaining)) left"
         } else if progress.percent >= 100 {
             transferDetailMessage = "Finishing \(fileName)..."
         } else {
-            transferDetailMessage = "Downloading \(fileName) - \(formatDuration(elapsed)) elapsed"
+            transferDetailMessage = "\(verb) \(fileName) - \(formatDuration(elapsed)) elapsed"
         }
     }
 

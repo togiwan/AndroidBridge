@@ -29,7 +29,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
-                .help("Upload file to Android")
+                .help("Upload files or folders to Android")
                 .disabled(store.isBusy || store.selectedDevice == nil)
 
                 Button {
@@ -39,8 +39,16 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.down")
                 }
-                .help("Download selected item")
-                .disabled(store.isBusy || store.selectedItem == nil)
+                .help("Choose where to save the selected Android items")
+                .disabled(store.isBusy || store.selectedItems.isEmpty)
+
+                Button {
+                    store.cancelCurrentOperation()
+                } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .help("Cancel current operation")
+                .disabled(!store.isBusy)
 
                 Button {
                     store.isShowingSetupGuide = true

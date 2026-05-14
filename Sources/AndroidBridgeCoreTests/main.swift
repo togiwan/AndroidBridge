@@ -156,6 +156,179 @@ func previewDestinationUsesDedicatedTemporaryFolder() {
     check(expectEqual(destination.file.path, "/tmp/AndroidBridgePreviews/sample image.jpg", "preview file path"))
 }
 
+func downloadDestinationUsesChosenFolderAndItemName() {
+    let folderURL = URL(fileURLWithPath: "/Users/me/Desktop")
+    let item = AndroidFileItem(
+        name: "holiday video.mp4",
+        path: "/sdcard/Download/holiday video.mp4",
+        kind: .file,
+        size: 2048
+    )
+
+    let destination = LocalDownloadDestination.destination(for: item, downloadDirectory: folderURL)
+
+    check(expectEqual(destination.directory.path, "/Users/me/Desktop", "download destination directory"))
+    check(expectEqual(destination.file.path, "/Users/me/Desktop/holiday video.mp4", "download destination file path"))
+}
+
+func selectionSummaryDescribesSingleAndMultipleItems() {
+    let photo = AndroidFileItem(name: "photo.jpg", path: "/sdcard/Download/photo.jpg", kind: .file, size: 10)
+    let folder = AndroidFileItem(name: "Camera", path: "/sdcard/Download/Camera", kind: .folder, size: 0)
+
+    check(expectEqual(AndroidSelectionSummary.downloadTitle(for: [photo]), "photo.jpg", "single selection title"))
+    check(expectEqual(AndroidSelectionSummary.downloadTitle(for: [photo, folder]), "2 items", "multi selection title"))
+    check(expectEqual(AndroidSelectionSummary.progressTitle(for: photo, index: 0, totalCount: 1), "photo.jpg", "single progress title"))
+    check(expectEqual(AndroidSelectionSummary.progressTitle(for: folder, index: 1, totalCount: 2), "2/2 Camera", "multi progress title"))
+    check(expectEqual(AndroidSelectionSummary.completedMessage(for: [photo], directoryName: "Desktop"), "Downloaded photo.jpg to Desktop.", "single completion message"))
+    check(expectEqual(AndroidSelectionSummary.completedMessage(for: [photo, folder], directoryName: "Desktop"), "Downloaded 2 items to Desktop.", "multi completion message"))
+}
+
+func uploadSelectionSummaryDescribesSingleAndMultipleURLs() {
+    let fileURL = URL(fileURLWithPath: "/Users/me/Desktop/photo.jpg")
+    let folderURL = URL(fileURLWithPath: "/Users/me/Desktop/Camera")
+
+    check(expectEqual(LocalUploadSelectionSummary.uploadTitle(for: [fileURL]), "photo.jpg", "single upload title"))
+    check(expectEqual(LocalUploadSelectionSummary.uploadTitle(for: [fileURL, folderURL]), "2 items", "multi upload title"))
+    check(expectEqual(LocalUploadSelectionSummary.progressTitle(for: fileURL, index: 0, totalCount: 1), "photo.jpg", "single upload progress title"))
+    check(expectEqual(LocalUploadSelectionSummary.progressTitle(for: folderURL, index: 1, totalCount: 2), "2/2 Camera", "multi upload progress title"))
+    check(expectEqual(LocalUploadSelectionSummary.completedMessage(for: [fileURL], remotePath: "/sdcard/Download"), "Uploaded photo.jpg to /sdcard/Download.", "single upload completion message"))
+    check(expectEqual(LocalUploadSelectionSummary.completedMessage(for: [fileURL, folderURL], remotePath: "/sdcard/Download"), "Uploaded 2 items to /sdcard/Download.", "multi upload completion message"))
+}
+
+@MainActor
+func commandFailureMapsUnauthorizedDeviceToHelpfulMessage() async {
+    let runner = FakeProcessRunner(results: [
+        ProcessResult(
+            stdout: "",
+            stderr: "error: device unauthorized.\nThis adb server's $ADB_VENDOR_KEYS is not set",
+            exitCode: 1
+        )
+    ])
+    let client = ADBClient(command: ADBCommand(executable: "/usr/bin/adb"), runner: runner)
+
+    do {
+        _ = try await client.listFiles(deviceID: "phone-1", path: "/sdcard/Download")
+        print("FAIL: listFiles should throw for unauthorized devices")
+        failures += 1
+    } catch {
+        check(expectEqual(
+            error.localizedDescription,
+            "This phone is not authorized yet. Unlock it, approve the USB debugging RSA prompt, then refresh devices.",
+            "map unauthorized adb error to helpful message"
+        ))
+    }
+}
+
+@MainActor
+func pushStreamsProgressUpdates() async throws {
+    let runner = FakeProcessRunner(
+        results: [
+            ProcessResult(stdout: "", stderr: "", exitCode: 0)
+        ],
+        streamingChunks: ["[ 42%] /Users/me/video.mp4"]
+    )
+    let client = ADBClient(command: ADBCommand(executable: "/usr/bin/adb"), runner: runner)
+    let progressRecorder = ProgressRecorder()
+
+    try await client.push(
+        deviceID: "phone-1",
+        localURL: URL(fileURLWithPath: "/Users/me/video.mp4"),
+        to: "/sdcard/Download"
+    ) { progress in
+        progressRecorder.append(progress)
+    }
+
+    check(expectEqual(progressRecorder.values, [ADBTransferProgress(percent: 42)], "push streams transfer progress"))
+    let recordedRuns = await runner.recordedRuns
+    check(expectEqual(recordedRuns.first?.arguments, [
+        "-s",
+        "phone-1",
+        "push",
+        "/Users/me/video.mp4",
+        "/sdcard/Download"
+    ], "push runs adb with expected arguments"))
+}
+
+@MainActor
+func processRunnerTerminatesProcessWhenTaskIsCancelled() async {
+    let runner = FoundationProcessRunner()
+    let startedAt = Date()
+    let task = Task {
+        try await runner.run("/bin/sleep", arguments: ["5"])
+    }
+
+    try? await Task.sleep(for: .milliseconds(200))
+    task.cancel()
+
+    do {
+        _ = try await task.value
+        print("FAIL: cancelled process runner task should throw")
+        failures += 1
+    } catch is CancellationError {
+        let elapsed = Date().timeIntervalSince(startedAt)
+        check(expectEqual(elapsed < 2, true, "cancelled process exits quickly"))
+    } catch {
+        print("FAIL: cancelled process runner task threw unexpected error: \(error)")
+        failures += 1
+    }
+}
+
+private final class ProgressRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var progressValues: [ADBTransferProgress] = []
+
+    var values: [ADBTransferProgress] {
+        lock.lock()
+        defer { lock.unlock() }
+        return progressValues
+    }
+
+    func append(_ progress: ADBTransferProgress) {
+        lock.lock()
+        progressValues.append(progress)
+        lock.unlock()
+    }
+}
+
+private actor FakeProcessRunner: ProcessRunning {
+    struct RecordedRun: Equatable {
+        let executable: String
+        let arguments: [String]
+        let isStreaming: Bool
+    }
+
+    private var results: [ProcessResult]
+    private let streamingChunks: [String]
+    private var runs: [RecordedRun] = []
+
+    init(results: [ProcessResult], streamingChunks: [String] = []) {
+        self.results = results
+        self.streamingChunks = streamingChunks
+    }
+
+    var recordedRuns: [RecordedRun] {
+        runs
+    }
+
+    func run(_ executable: String, arguments: [String]) async throws -> ProcessResult {
+        runs.append(RecordedRun(executable: executable, arguments: arguments, isStreaming: false))
+        let result = results.removeFirst()
+        return result
+    }
+
+    func runStreaming(
+        _ executable: String,
+        arguments: [String],
+        onOutput: @escaping @Sendable (String) -> Void
+    ) async throws -> ProcessResult {
+        runs.append(RecordedRun(executable: executable, arguments: arguments, isStreaming: true))
+        let result = results.removeFirst()
+
+        streamingChunks.forEach(onOutput)
+        return result
+    }
+}
+
 parsesConnectedUnauthorizedAndOfflineDevices()
 parsesFileListingWithFoldersFilesAndSpaces()
 joiningPathComponentsAvoidsDuplicateSlashes()
@@ -167,6 +340,12 @@ resolvesADBFromCommonMacInstallPathsBeforeEnvFallback()
 fallsBackToEnvWhenADBIsNotInKnownLocations()
 donationInfoUsesUSDTTRC20Address()
 previewDestinationUsesDedicatedTemporaryFolder()
+downloadDestinationUsesChosenFolderAndItemName()
+selectionSummaryDescribesSingleAndMultipleItems()
+uploadSelectionSummaryDescribesSingleAndMultipleURLs()
+await commandFailureMapsUnauthorizedDeviceToHelpfulMessage()
+try await pushStreamsProgressUpdates()
+await processRunnerTerminatesProcessWhenTaskIsCancelled()
 
 if failures > 0 {
     print("AndroidBridgeCoreTests failed: \(failures)")

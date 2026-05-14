@@ -36,7 +36,10 @@ public final class FoundationProcessRunner: ProcessRunning, @unchecked Sendable 
     public init() {}
 
     public func run(_ executable: String, arguments: [String]) async throws -> ProcessResult {
-        try await withCheckedThrowingContinuation { continuation in
+        let execution = ProcessExecutionState()
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             let outputPipe = Pipe()
             let errorPipe = Pipe()
@@ -52,18 +55,33 @@ public final class FoundationProcessRunner: ProcessRunning, @unchecked Sendable 
                 let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
                 let stderr = String(data: stderrData, encoding: .utf8) ?? ""
 
-                continuation.resume(returning: ProcessResult(
-                    stdout: stdout,
-                    stderr: stderr,
-                    exitCode: process.terminationStatus
-                ))
+                switch execution.finish() {
+                case .cancelled:
+                    continuation.resume(throwing: CancellationError())
+                case .completed:
+                    continuation.resume(returning: ProcessResult(
+                        stdout: stdout,
+                        stderr: stderr,
+                        exitCode: process.terminationStatus
+                    ))
+                case .alreadyFinished:
+                    return
+                }
             }
 
             do {
                 try process.run()
+                if execution.attach(process) {
+                    process.terminate()
+                }
             } catch {
-                continuation.resume(throwing: ProcessRunnerError.launchFailed(error.localizedDescription))
+                if execution.finish() != .alreadyFinished {
+                    continuation.resume(throwing: ProcessRunnerError.launchFailed(error.localizedDescription))
+                }
             }
+            }
+        } onCancel: {
+            execution.cancel()
         }
     }
 
@@ -72,7 +90,10 @@ public final class FoundationProcessRunner: ProcessRunning, @unchecked Sendable 
         arguments: [String],
         onOutput: @escaping @Sendable (String) -> Void
     ) async throws -> ProcessResult {
-        try await withCheckedThrowingContinuation { continuation in
+        let execution = ProcessExecutionState()
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             let outputPipe = Pipe()
             let errorPipe = Pipe()
@@ -117,21 +138,78 @@ public final class FoundationProcessRunner: ProcessRunning, @unchecked Sendable 
                 let stdout = stdoutBuffer.stringValue()
                 let stderr = stderrBuffer.stringValue()
 
-                continuation.resume(returning: ProcessResult(
-                    stdout: stdout,
-                    stderr: stderr,
-                    exitCode: process.terminationStatus
-                ))
+                switch execution.finish() {
+                case .cancelled:
+                    continuation.resume(throwing: CancellationError())
+                case .completed:
+                    continuation.resume(returning: ProcessResult(
+                        stdout: stdout,
+                        stderr: stderr,
+                        exitCode: process.terminationStatus
+                    ))
+                case .alreadyFinished:
+                    return
+                }
             }
 
             do {
                 try process.run()
+                if execution.attach(process) {
+                    process.terminate()
+                }
             } catch {
                 outputPipe.fileHandleForReading.readabilityHandler = nil
                 errorPipe.fileHandleForReading.readabilityHandler = nil
-                continuation.resume(throwing: ProcessRunnerError.launchFailed(error.localizedDescription))
+                if execution.finish() != .alreadyFinished {
+                    continuation.resume(throwing: ProcessRunnerError.launchFailed(error.localizedDescription))
+                }
             }
+            }
+        } onCancel: {
+            execution.cancel()
         }
+    }
+}
+
+private final class ProcessExecutionState: @unchecked Sendable {
+    enum FinishState {
+        case completed
+        case cancelled
+        case alreadyFinished
+    }
+
+    private let lock = NSLock()
+    private var process: Process?
+    private var isCancelled = false
+    private var isFinished = false
+
+    func attach(_ process: Process) -> Bool {
+        lock.lock()
+        self.process = process
+        let shouldTerminate = isCancelled
+        lock.unlock()
+        return shouldTerminate
+    }
+
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        let process = process
+        lock.unlock()
+
+        process?.terminate()
+    }
+
+    func finish() -> FinishState {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !isFinished else {
+            return .alreadyFinished
+        }
+
+        isFinished = true
+        return isCancelled ? .cancelled : .completed
     }
 }
 

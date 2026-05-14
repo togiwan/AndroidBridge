@@ -1,10 +1,23 @@
 # AndroidBridge
 
+![Latest release](https://img.shields.io/github/v/release/togiwan/AndroidBridge)
+![Platform](https://img.shields.io/badge/macOS-14%2B-blue)
+![License](https://img.shields.io/github/license/togiwan/AndroidBridge)
+
 AndroidBridge is a small, free, native macOS app for transferring files between a Mac and an Android phone over USB using ADB.
 
-It is intentionally simple: connect a phone, browse `/sdcard/Download`, download files to the Mac, and upload files back to the current Android folder.
+It is intentionally simple: connect a phone, browse Android folders, download files to a Mac folder you choose, and upload files or folders back to the current Android folder.
 
 ![AndroidBridge screenshot](assets/androidbridge-screenshot.png)
+
+## What's New In 1.1.0
+
+- Upload multiple Mac files or folders in one action
+- Select and download multiple Android files or folders at once
+- Choose the Mac folder for each download instead of always using Downloads
+- Cancel long-running transfers from the toolbar or status bar
+- See upload progress, download progress, elapsed time, and ETA where available
+- Get clearer ADB error messages for unauthorized, offline, missing, or permission-denied devices and files
 
 ## Install
 
@@ -31,10 +44,12 @@ This free release is ad-hoc signed but not notarized. If macOS blocks the first 
 
 - Lists Android devices connected over USB
 - Browses Android folders through ADB
-- Downloads files and folders to the Mac Downloads folder
-- Uploads Mac files or folders to the current Android folder
+- Selects one or more Android files or folders at once
+- Downloads files and folders to a Mac folder you choose
+- Uploads one or more Mac files or folders to the current Android folder
+- Cancels active transfers
 - Opens Android files through a temporary local preview
-- Shows download progress and estimated time for files
+- Shows upload/download progress and estimated time for files
 - Includes an in-app setup guide for Android Platform-Tools and USB debugging
 - Optional donation sheet with copyable wallet address
 
@@ -122,3 +137,7 @@ Only send USDT on the TRC20 network to this address.
 ## License
 
 MIT License. See [LICENSE](LICENSE).
+
+## Keywords
+
+`#AndroidBridge` `#macOS` `#Android` `#ADB` `#USBTransfer` `#FileTransfer` `#SwiftUI`

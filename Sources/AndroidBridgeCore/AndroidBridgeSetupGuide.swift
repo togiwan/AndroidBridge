@@ -110,12 +110,12 @@ public enum AndroidBridgeSetupGuide {
                 SetupGuideStep(
                     id: "download",
                     title: "Download from Android to Mac",
-                    body: "Select a file on the phone and click Download. The file is saved to the Mac Downloads folder."
+                    body: "Select one or more files or folders on the phone, click Download To, then choose where to save them on your Mac."
                 ),
                 SetupGuideStep(
                     id: "upload",
                     title: "Upload from Mac to Android",
-                    body: "Open the target folder on the phone, click Upload, and choose a file or folder from your Mac. The selected item is sent to the currently open Android folder."
+                    body: "Open the target folder on the phone, click Upload, and choose one or more files or folders from your Mac. The selected items are sent to the currently open Android folder."
                 )
             ]
         )

@@ -23,7 +23,7 @@ struct FileBrowserView: View {
                     description: Text(store.statusMessage)
                 )
             } else {
-                Table(store.files, selection: $store.selectedItemID) {
+                Table(store.files, selection: $store.selectedItemIDs) {
                     TableColumn("Name") { item in
                         HStack(spacing: 8) {
                             Image(systemName: item.kind == .folder ? "folder" : "doc")
@@ -62,8 +62,9 @@ struct FileBrowserView: View {
                             }
                         }
                     }
+                    .disabled(store.selectedItem == nil)
 
-                    Button("Download to Downloads") {
+                    Button("Download To...") {
                         Task {
                             await store.downloadSelected()
                         }
@@ -95,6 +96,14 @@ struct FileBrowserView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+
+                Button {
+                    store.cancelCurrentOperation()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .help("Cancel current operation")
             }
 
             Text(store.transferDetailMessage ?? store.statusMessage)
@@ -141,7 +150,7 @@ struct FileBrowserView: View {
             } label: {
                 Label("Upload", systemImage: "square.and.arrow.up")
             }
-            .help("Upload a file or folder to Android")
+            .help("Upload files or folders to Android")
             .disabled(store.isBusy || store.selectedDevice == nil)
 
             Button {
@@ -149,9 +158,10 @@ struct FileBrowserView: View {
                     await store.downloadSelected()
                 }
             } label: {
-                Label("Download", systemImage: "square.and.arrow.down")
+                Label("Download To...", systemImage: "square.and.arrow.down")
             }
-            .disabled(store.isBusy || store.selectedItem == nil)
+            .help("Choose where to save the selected Android items")
+            .disabled(store.isBusy || store.selectedItems.isEmpty)
         }
         .padding(14)
     }
