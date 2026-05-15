@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ADBWirelessView: View {
     @Bindable var store: WirelessTransferStore
+    @Bindable var androidStore: AndroidBridgeStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -10,6 +11,10 @@ struct ADBWirelessView: View {
                 .font(.title2.bold())
 
             Text("Use this for full file browser access over Wi-Fi.")
+                .foregroundStyle(.secondary)
+
+            Text("After connecting, switch to USB Transfer and use the same file browser. ADB lists wireless debugging devices beside USB devices.")
+                .font(.callout)
                 .foregroundStyle(.secondary)
 
             HStack {
@@ -65,6 +70,9 @@ struct ADBWirelessView: View {
                 }
                 Button("Connect") {
                     Task { await store.connectADBWireless() }
+                }
+                Button("Refresh Devices") {
+                    Task { await androidStore.refreshDevices() }
                 }
                 Button("Disconnect") {
                     Task { await store.disconnectADBWireless() }

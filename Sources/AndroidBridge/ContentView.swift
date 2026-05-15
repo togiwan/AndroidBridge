@@ -22,7 +22,7 @@ struct ContentView: View {
                 case .usb:
                     usbTransferView
                 case .wireless:
-                    WirelessTransferView()
+                    WirelessTransferView(androidStore: store)
                 }
             }
         }
