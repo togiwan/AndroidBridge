@@ -13,6 +13,8 @@ final class WirelessTransferStore {
     var sharedItems: [SharedDownloadItem] = []
     var adbWirelessStatusMessage = "Scan for wireless debugging devices or connect manually."
 
+    private let browserServer = WirelessHTTPServer()
+
     var isBrowserSessionRunning: Bool {
         browserSession != nil
     }
@@ -24,12 +26,20 @@ final class WirelessTransferStore {
 
         let session = WirelessTransferSession(receiveFolder: receiveFolder)
         browserSession = session
-        browserURL = URL(string: "http://localhost:8123/\(session.token.urlToken)")
         sharedItems = []
-        browserStatusMessage = "Browser Transfer session is ready."
+
+        do {
+            browserURL = try browserServer.start(session: session)
+            browserStatusMessage = "Browser Transfer session is ready."
+        } catch {
+            browserSession = nil
+            browserURL = nil
+            browserStatusMessage = "Could not start Browser Transfer: \(error.localizedDescription)"
+        }
     }
 
     func stopBrowserSession() {
+        browserServer.stop()
         browserSession = nil
         browserURL = nil
         sharedItems = []
