@@ -1,3 +1,4 @@
+import AndroidBridgeCore
 import SwiftUI
 
 struct ADBWirelessView: View {
@@ -10,6 +11,34 @@ struct ADBWirelessView: View {
 
             Text("Use this for full file browser access over Wi-Fi.")
                 .foregroundStyle(.secondary)
+
+            HStack {
+                Button("Scan") {
+                    store.scanADBWireless()
+                }
+                Button("Stop Scan") {
+                    store.stopADBWirelessScan()
+                }
+            }
+
+            List(store.discoveredADBServices) { service in
+                Button {
+                    switch service.kind {
+                    case .pairing:
+                        store.adbPairingAddress = service.address
+                    case .connect:
+                        store.adbConnectionAddress = service.address
+                    }
+                } label: {
+                    HStack {
+                        Text(service.name)
+                        Spacer()
+                        Text(service.kind == .pairing ? "Pair" : "Connect")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(minHeight: 120, maxHeight: 180)
 
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                 GridRow {

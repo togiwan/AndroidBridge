@@ -15,9 +15,11 @@ final class WirelessTransferStore {
     var adbPairingAddress = ""
     var adbPairingCode = ""
     var adbConnectionAddress = ""
+    var discoveredADBServices: [ADBWirelessService] = []
 
     private let browserServer = WirelessHTTPServer()
     private let adbWirelessClient = ADBWirelessClient()
+    private let adbDiscovery = ADBWirelessDiscovery()
 
     var isBrowserSessionRunning: Bool {
         browserSession != nil
@@ -164,6 +166,24 @@ final class WirelessTransferStore {
         } catch {
             adbWirelessStatusMessage = error.localizedDescription
         }
+    }
+
+    func scanADBWireless() {
+        adbWirelessStatusMessage = "Scanning for wireless debugging devices..."
+        adbDiscovery.start { [weak self] services in
+            Task { @MainActor in
+                self?.discoveredADBServices = services
+                self?.adbWirelessStatusMessage = services.isEmpty
+                    ? "No wireless debugging devices found yet."
+                    : "Found \(services.count) wireless debugging service(s)."
+            }
+        }
+    }
+
+    func stopADBWirelessScan() {
+        adbDiscovery.stop()
+        discoveredADBServices = []
+        adbWirelessStatusMessage = "Scan stopped."
     }
 
     private func saveUploadedFile(filename: String, data: Data) {
