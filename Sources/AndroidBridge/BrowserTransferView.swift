@@ -65,6 +65,9 @@ struct BrowserTransferView: View {
 
     private var sharedItemsTable: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("Shared with Phone")
+                .font(.headline)
+
             HStack {
                 Button("Add Files") {
                     store.addSharedFiles()
@@ -84,20 +87,25 @@ struct BrowserTransferView: View {
                 .disabled(store.sharedItems.isEmpty)
             }
 
-            Table(store.sharedItems, selection: $selectedSharedItemIDs) {
-                TableColumn("Name") { item in
-                    Text(item.name)
+            if store.sharedItems.isEmpty {
+                Text("Files added here appear on the phone after tapping Refresh List.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Table(store.sharedItems, selection: $selectedSharedItemIDs) {
+                    TableColumn("Name") { item in
+                        Text(item.name)
+                    }
+                    TableColumn("Kind") { item in
+                        Text(item.kind == .file ? "File" : "Folder ZIP")
+                            .foregroundStyle(.secondary)
+                    }
+                    TableColumn("Size") { item in
+                        Text(item.byteCount.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "--")
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                TableColumn("Kind") { item in
-                    Text(item.kind == .file ? "File" : "Folder ZIP")
-                        .foregroundStyle(.secondary)
-                }
-                TableColumn("Size") { item in
-                    Text(item.byteCount.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "--")
-                        .foregroundStyle(.secondary)
-                }
+                .frame(minHeight: 180)
             }
-            .frame(minHeight: 180)
         }
     }
 

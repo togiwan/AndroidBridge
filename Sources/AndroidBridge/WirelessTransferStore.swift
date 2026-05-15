@@ -88,6 +88,9 @@ final class WirelessTransferStore {
         }
         session.addSharedItems(items)
         sharedItems = session.sharedItems
+        browserStatusMessage = items.count == 1
+            ? "Added \(items[0].name). Refresh the phone page to see it."
+            : "Added \(items.count) files. Refresh the phone page to see them."
     }
 
     func addSharedFolder() {
@@ -132,7 +135,9 @@ final class WirelessTransferStore {
             session.addSharedItems(items)
             sharedItems = session.sharedItems
             if !items.isEmpty {
-                browserStatusMessage = "Prepared \(items.count) folder ZIP archive(s)."
+                browserStatusMessage = items.count == 1
+                    ? "Prepared \(items[0].name). Refresh the phone page to see it."
+                    : "Prepared \(items.count) folder ZIP archives. Refresh the phone page to see them."
             }
         }
     }
