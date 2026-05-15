@@ -36,8 +36,11 @@ public enum WirelessHTMLRenderer {
         </section>
         <section>
           <h2>Get from Mac</h2>
+          <form method="GET" action="\(pathPrefix)">
+            <button type="submit">Refresh List</button>
+          </form>
           <ul>
-            \(list.isEmpty ? "<li>No files shared from Mac.</li>" : list)
+            \(list.isEmpty ? "<li>No files shared yet. Add files in AndroidBridge on your Mac, then refresh this page.</li>" : list)
           </ul>
         </section>
         """ : ""

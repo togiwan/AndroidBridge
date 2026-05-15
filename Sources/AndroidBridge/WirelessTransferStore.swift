@@ -11,6 +11,7 @@ final class WirelessTransferStore {
     var browserURL: URL?
     var browserStatusMessage = "Start a Browser Transfer session to send files over Wi-Fi."
     var sharedItems: [SharedDownloadItem] = []
+    var receivedUploads: [ReceivedUploadRecord] = []
     var adbWirelessStatusMessage = "Scan for wireless debugging devices or connect manually."
     var adbPairingAddress = ""
     var adbPairingCode = ""
@@ -35,6 +36,7 @@ final class WirelessTransferStore {
         let session = WirelessTransferSession(receiveFolder: receiveFolder)
         browserSession = session
         sharedItems = []
+        receivedUploads = []
 
         do {
             browserURL = try browserServer.start(session: session)
@@ -61,6 +63,7 @@ final class WirelessTransferStore {
         browserSession = nil
         browserURL = nil
         sharedItems = []
+        receivedUploads = []
         browserStatusMessage = "Browser Transfer session stopped."
     }
 
@@ -219,11 +222,19 @@ final class WirelessTransferStore {
                 existingFilenames: existing
             )
             try data.write(to: destination, options: .atomic)
+            receivedUploads.insert(
+                ReceivedUploadRecord(fileURL: destination, byteCount: data.count, receivedAt: Date()),
+                at: 0
+            )
             restartBrowserTimeout()
             browserStatusMessage = "Received \(destination.lastPathComponent)."
         } catch {
             browserStatusMessage = "Could not save upload: \(error.localizedDescription)"
         }
+    }
+
+    func revealReceivedUpload(_ upload: ReceivedUploadRecord) {
+        NSWorkspace.shared.activateFileViewerSelecting([upload.fileURL])
     }
 
     private func restartBrowserTimeout() {

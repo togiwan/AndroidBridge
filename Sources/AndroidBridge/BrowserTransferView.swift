@@ -27,6 +27,7 @@ struct BrowserTransferView: View {
                 }
 
                 sharedItemsTable
+                receivedUploadsTable
             } else {
                 ContentUnavailableView(
                     "Browser Transfer",
@@ -97,6 +98,32 @@ struct BrowserTransferView: View {
                 }
             }
             .frame(minHeight: 180)
+        }
+    }
+
+    private var receivedUploadsTable: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Received from Phone")
+                .font(.headline)
+
+            if store.receivedUploads.isEmpty {
+                Text("Files sent from the phone will appear here and save to the receive folder above.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Table(store.receivedUploads) {
+                    TableColumn("Name") { upload in
+                        Button(upload.name) {
+                            store.revealReceivedUpload(upload)
+                        }
+                        .buttonStyle(.link)
+                    }
+                    TableColumn("Size") { upload in
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(upload.byteCount), countStyle: .file))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(minHeight: 120)
+            }
         }
     }
 }
