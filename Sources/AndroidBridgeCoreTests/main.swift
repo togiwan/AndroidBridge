@@ -246,6 +246,22 @@ func wirelessSessionAddsAndClearsSharedItems() {
     check(expectEqual(session.sharedItems.isEmpty, true, "session clears shared items"))
 }
 
+func wirelessHTMLRendererEscapesNamesAndShowsActions() {
+    let item = SharedDownloadItem(
+        id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+        url: URL(fileURLWithPath: "/Users/me/Desktop/a&b.jpg"),
+        kind: .file,
+        byteCount: 42
+    )
+
+    let html = WirelessHTMLRenderer.pageHTML(sharedItems: [item], authenticated: true)
+
+    check(expectEqual(html.contains("Send to Mac"), true, "html includes send section"))
+    check(expectEqual(html.contains("Get from Mac"), true, "html includes get section"))
+    check(expectEqual(html.contains("a&amp;b.jpg"), true, "html escapes item name"))
+    check(expectEqual(html.contains("/download/11111111-1111-1111-1111-111111111111"), true, "html links shared item"))
+}
+
 @MainActor
 func commandFailureMapsUnauthorizedDeviceToHelpfulMessage() async {
     let runner = FakeProcessRunner(results: [
@@ -398,6 +414,7 @@ wirelessTokenCreatesUsableURLTokenAndPIN()
 sharedDownloadItemUsesFriendlyMetadata()
 uploadDestinationAutoRenamesCollisionsInsideReceiveFolder()
 wirelessSessionAddsAndClearsSharedItems()
+wirelessHTMLRendererEscapesNamesAndShowsActions()
 await commandFailureMapsUnauthorizedDeviceToHelpfulMessage()
 try await pushStreamsProgressUpdates()
 await processRunnerTerminatesProcessWhenTaskIsCancelled()
