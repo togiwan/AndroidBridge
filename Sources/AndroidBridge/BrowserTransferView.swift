@@ -1,0 +1,102 @@
+import AndroidBridgeCore
+import SwiftUI
+
+struct BrowserTransferView: View {
+    @Bindable var store: WirelessTransferStore
+    @State private var selectedSharedItemIDs: Set<SharedDownloadItem.ID> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header
+
+            if let url = store.browserURL, let session = store.browserSession {
+                HStack(alignment: .top, spacing: 18) {
+                    QRCodeView(text: url.absoluteString)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(url.absoluteString)
+                            .textSelection(.enabled)
+                            .lineLimit(2)
+                        Text("PIN: \(session.token.pin)")
+                            .font(.title3.monospacedDigit())
+                        Text("Receive Folder: \(session.receiveFolder.path)")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+
+                sharedItemsTable
+            } else {
+                ContentUnavailableView(
+                    "Browser Transfer",
+                    systemImage: "qrcode",
+                    description: Text("Start a local session, scan the QR code with your Android phone, then send or receive files in the browser.")
+                )
+            }
+
+            Spacer()
+            Text(store.browserStatusMessage)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .padding(18)
+    }
+
+    private var header: some View {
+        HStack {
+            Text("Browser Transfer")
+                .font(.title2.bold())
+
+            Spacer()
+
+            Button("Start Session") {
+                store.startBrowserSession()
+            }
+            .disabled(store.isBrowserSessionRunning)
+
+            Button("Stop") {
+                store.stopBrowserSession()
+            }
+            .disabled(!store.isBrowserSessionRunning)
+        }
+    }
+
+    private var sharedItemsTable: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Button("Add Files") {
+                    store.addSharedFiles()
+                }
+                Button("Add Folder") {
+                    store.addSharedFolder()
+                }
+                Button("Remove") {
+                    store.removeSharedItems(ids: selectedSharedItemIDs)
+                    selectedSharedItemIDs = []
+                }
+                .disabled(selectedSharedItemIDs.isEmpty)
+                Button("Clear") {
+                    store.clearSharedItems()
+                    selectedSharedItemIDs = []
+                }
+                .disabled(store.sharedItems.isEmpty)
+            }
+
+            Table(store.sharedItems, selection: $selectedSharedItemIDs) {
+                TableColumn("Name") { item in
+                    Text(item.name)
+                }
+                TableColumn("Kind") { item in
+                    Text(item.kind == .file ? "File" : "Folder ZIP")
+                        .foregroundStyle(.secondary)
+                }
+                TableColumn("Size") { item in
+                    Text(item.byteCount.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "--")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(minHeight: 180)
+        }
+    }
+}
