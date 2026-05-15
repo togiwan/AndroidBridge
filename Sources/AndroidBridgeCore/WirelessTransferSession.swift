@@ -2,13 +2,19 @@ import Foundation
 
 public final class WirelessTransferSession: @unchecked Sendable {
     public let token: WirelessTransferToken
+    public let authCookieValue: String
     public let receiveFolder: URL
 
     private let lock = NSLock()
     private var items: [SharedDownloadItem] = []
 
-    public init(token: WirelessTransferToken = .generate(), receiveFolder: URL) {
+    public init(
+        token: WirelessTransferToken = .generate(),
+        authCookieValue: String = WirelessTransferToken.generate().urlToken,
+        receiveFolder: URL
+    ) {
         self.token = token
+        self.authCookieValue = authCookieValue
         self.receiveFolder = receiveFolder
     }
 

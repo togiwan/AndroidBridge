@@ -34,6 +34,7 @@ public final class ADBWirelessDiscovery: NSObject, @unchecked Sendable {
     private var servicesByID: [String: ADBWirelessService] = [:]
     private var resolvingServices: [NetService] = []
     private var onUpdate: UpdateHandler?
+    private var isScanning = false
 
     public override init() {
         super.init()
@@ -46,6 +47,7 @@ public final class ADBWirelessDiscovery: NSObject, @unchecked Sendable {
         servicesByID = [:]
         resolvingServices = []
         self.onUpdate = onUpdate
+        isScanning = true
         lock.unlock()
 
         pairingBrowser.searchForServices(ofType: "_adb-tls-pairing._tcp.", inDomain: "local.")
@@ -60,6 +62,8 @@ public final class ADBWirelessDiscovery: NSObject, @unchecked Sendable {
         resolvingServices.forEach { $0.stop() }
         resolvingServices = []
         servicesByID = [:]
+        onUpdate = nil
+        isScanning = false
         lock.unlock()
     }
 
@@ -76,11 +80,16 @@ public final class ADBWirelessDiscovery: NSObject, @unchecked Sendable {
         )
 
         lock.lock()
+        guard isScanning else {
+            lock.unlock()
+            return
+        }
         servicesByID[adbService.id] = adbService
         let services = servicesByID.values.sorted { $0.name < $1.name }
+        let update = onUpdate
         lock.unlock()
 
-        onUpdate?(services)
+        update?(services)
     }
 
     private func kind(for service: NetService) -> ADBWirelessService.Kind? {
@@ -113,13 +122,18 @@ extension ADBWirelessDiscovery: NetServiceBrowserDelegate {
         }
 
         lock.lock()
+        guard isScanning else {
+            lock.unlock()
+            return
+        }
         servicesByID = servicesByID.filter { _, value in
             !(value.name == service.name && value.kind == kind)
         }
         let services = servicesByID.values.sorted { $0.name < $1.name }
+        let update = onUpdate
         lock.unlock()
 
-        onUpdate?(services)
+        update?(services)
     }
 }
 

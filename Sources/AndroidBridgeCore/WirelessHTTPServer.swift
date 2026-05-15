@@ -18,9 +18,11 @@ public final class WirelessHTTPServer: @unchecked Sendable {
     private let configuration: Configuration
     private let queue = DispatchQueue(label: "AndroidBridge.WirelessHTTPServer")
     private let uploadHandlerLock = NSLock()
+    private let authLock = NSLock()
     private var listener: NWListener?
     private var session: WirelessTransferSession?
     private var uploadHandler: UploadHandler?
+    private var failedPINAttempts = 0
 
     public init(configuration: Configuration = Configuration()) {
         self.configuration = configuration
@@ -28,6 +30,7 @@ public final class WirelessHTTPServer: @unchecked Sendable {
 
     public func start(session: WirelessTransferSession) throws -> URL {
         self.session = session
+        resetPINAttempts()
         let parameters = NWParameters.tcp
         let listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: configuration.port)!)
         self.listener = listener
@@ -44,6 +47,7 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         listener?.cancel()
         listener = nil
         session = nil
+        resetPINAttempts()
     }
 
     public func setUploadHandler(_ handler: UploadHandler?) {
@@ -116,49 +120,82 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         let parts = firstLine.split(separator: " ")
         let method = parts.first.map(String.init) ?? "GET"
         let path = parts.count >= 2 ? String(parts[1]) : "/"
+        let tokenPath = "/\(session.token.urlToken)"
 
-        guard path.contains(session.token.urlToken) || path == "/" || path == "/pin" || path == "/upload" || path.hasPrefix("/download/") else {
+        guard path == tokenPath || path.hasPrefix("\(tokenPath)/") else {
             return httpResponse(status: "404 Not Found", body: "Session not found")
         }
 
-        if method == "POST", path == "/pin" {
+        if method == "POST", path == "\(tokenPath)/pin" {
             return handlePIN(body: body, session: session)
         }
 
         let authenticated = isAuthenticated(header: header, session: session)
 
-        if method == "POST", path == "/upload" {
+        if method == "POST", path == "\(tokenPath)/upload" {
             guard authenticated else {
                 return httpResponse(status: "403 Forbidden", body: "Enter the PIN before uploading files.")
             }
             return handleUpload(header: header, body: body)
         }
 
-        if path.hasPrefix("/download/") {
+        if path.hasPrefix("\(tokenPath)/download/") {
             guard authenticated else {
                 return httpResponse(status: "403 Forbidden", body: "Enter the PIN before downloading files.")
             }
-            return handleDownload(path: path, session: session)
+            return handleDownload(path: path, tokenPath: tokenPath, session: session)
         }
 
-        let html = WirelessHTMLRenderer.pageHTML(sharedItems: session.sharedItems, authenticated: authenticated)
+        let html = WirelessHTMLRenderer.pageHTML(
+            sharedItems: session.sharedItems,
+            authenticated: authenticated,
+            sessionToken: session.token.urlToken
+        )
         return httpResponse(status: "200 OK", body: html, contentType: "text/html; charset=utf-8")
     }
 
     private func handlePIN(body: Data, session: WirelessTransferSession) -> Data {
+        guard currentPINAttempts() < 10 else {
+            return httpResponse(status: "429 Too Many Requests", body: "Too many PIN attempts. Stop and restart the session.")
+        }
+
         guard postedPIN(from: body) == session.token.pin else {
-            let html = WirelessHTMLRenderer.pageHTML(sharedItems: session.sharedItems, authenticated: false)
+            incrementPINAttempts()
+            let html = WirelessHTMLRenderer.pageHTML(
+                sharedItems: session.sharedItems,
+                authenticated: false,
+                sessionToken: session.token.urlToken
+            )
             return httpResponse(status: "403 Forbidden", body: html, contentType: "text/html; charset=utf-8")
         }
 
+        resetPINAttempts()
         return httpRedirect(
             location: "/\(session.token.urlToken)",
-            headers: ["Set-Cookie: AndroidBridgePIN=\(session.token.urlToken); Path=/; SameSite=Strict"]
+            headers: ["Set-Cookie: AndroidBridgeAuth=\(session.authCookieValue); Path=/; SameSite=Strict"]
         )
     }
 
     private func isAuthenticated(header: String, session: WirelessTransferSession) -> Bool {
-        header.contains("Cookie: AndroidBridgePIN=\(session.token.urlToken)")
+        header.contains("AndroidBridgeAuth=\(session.authCookieValue)")
+    }
+
+    private func currentPINAttempts() -> Int {
+        authLock.lock()
+        defer { authLock.unlock() }
+        return failedPINAttempts
+    }
+
+    private func incrementPINAttempts() {
+        authLock.lock()
+        failedPINAttempts += 1
+        authLock.unlock()
+    }
+
+    private func resetPINAttempts() {
+        authLock.lock()
+        failedPINAttempts = 0
+        authLock.unlock()
     }
 
     private func postedPIN(from body: Data) -> String? {
@@ -173,8 +210,8 @@ public final class WirelessHTTPServer: @unchecked Sendable {
             .removingPercentEncoding
     }
 
-    private func handleDownload(path: String, session: WirelessTransferSession) -> Data {
-        let idString = path.replacingOccurrences(of: "/download/", with: "")
+    private func handleDownload(path: String, tokenPath: String, session: WirelessTransferSession) -> Data {
+        let idString = path.replacingOccurrences(of: "\(tokenPath)/download/", with: "")
         guard let id = UUID(uuidString: idString),
               let item = session.sharedItem(id: id) else {
             return httpResponse(status: "404 Not Found", body: "Shared item not found")
@@ -370,7 +407,10 @@ public final class WirelessHTTPServer: @unchecked Sendable {
             }
 
             let name = String(cString: interface.ifa_name)
-            guard name == "en0" || name == "en1" else {
+            let flags = Int32(interface.ifa_flags)
+            let isUp = flags & IFF_UP != 0
+            let isLoopback = flags & IFF_LOOPBACK != 0
+            guard isUp && !isLoopback && !name.hasPrefix("awdl") && !name.hasPrefix("llw") else {
                 continue
             }
 

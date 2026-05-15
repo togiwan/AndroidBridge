@@ -1,12 +1,17 @@
 import Foundation
 
 public enum WirelessHTMLRenderer {
-    public static func pageHTML(sharedItems: [SharedDownloadItem], authenticated: Bool) -> String {
+    public static func pageHTML(
+        sharedItems: [SharedDownloadItem],
+        authenticated: Bool,
+        sessionToken: String? = nil
+    ) -> String {
+        let pathPrefix = sessionToken.map { "/\($0)" } ?? ""
         let list = sharedItems.map { item in
             """
             <li>
               <span>\(escape(item.name))</span>
-              <a href="/download/\(item.id.uuidString)">Download</a>
+              <a href="\(pathPrefix)/download/\(item.id.uuidString)">Download</a>
             </li>
             """
         }.joined(separator: "\n")
@@ -14,7 +19,7 @@ public enum WirelessHTMLRenderer {
         let authBlock = authenticated ? "" : """
         <section>
           <h2>Enter PIN</h2>
-          <form method="POST" action="/pin">
+          <form method="POST" action="\(pathPrefix)/pin">
             <input name="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
             <button type="submit">Unlock</button>
           </form>
@@ -24,7 +29,7 @@ public enum WirelessHTMLRenderer {
         let transferBlock = authenticated ? """
         <section>
           <h2>Send to Mac</h2>
-          <form method="POST" action="/upload" enctype="multipart/form-data">
+          <form method="POST" action="\(pathPrefix)/upload" enctype="multipart/form-data">
             <input type="file" name="files" multiple>
             <button type="submit">Send</button>
           </form>

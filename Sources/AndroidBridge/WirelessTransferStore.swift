@@ -21,6 +21,7 @@ final class WirelessTransferStore {
     private let adbWirelessClient = ADBWirelessClient()
     private let adbDiscovery = ADBWirelessDiscovery()
     private var browserTimeoutTask: Task<Void, Never>?
+    private var generatedArchiveURLs: Set<URL> = []
 
     var isBrowserSessionRunning: Bool {
         browserSession != nil
@@ -56,6 +57,7 @@ final class WirelessTransferStore {
         browserTimeoutTask = nil
         browserServer.setUploadHandler(nil)
         browserServer.stop()
+        deleteGeneratedArchives()
         browserSession = nil
         browserURL = nil
         sharedItems = []
@@ -117,6 +119,7 @@ final class WirelessTransferStore {
                         kind: .file,
                         byteCount: fileSize(archiveURL)
                     )
+                    generatedArchiveURLs.insert(archiveURL)
                     items.append(archiveItem)
                 } catch {
                     browserStatusMessage = "Could not prepare \(url.lastPathComponent): \(error.localizedDescription)"
@@ -136,11 +139,14 @@ final class WirelessTransferStore {
             return
         }
 
+        let removedItems = sharedItems.filter { ids.contains($0.id) }
+        deleteGeneratedArchives(for: removedItems)
         ids.forEach { session.removeSharedItem(id: $0) }
         sharedItems = session.sharedItems
     }
 
     func clearSharedItems() {
+        deleteGeneratedArchives(for: sharedItems)
         browserSession?.clearSharedItems()
         sharedItems = []
     }
@@ -148,7 +154,12 @@ final class WirelessTransferStore {
     func pairADBWireless() async {
         do {
             try await adbWirelessClient.pair(address: adbPairingAddress, code: adbPairingCode)
-            adbWirelessStatusMessage = "Paired. Connecting next."
+            if adbConnectionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                adbWirelessStatusMessage = "Paired. Enter the connection address, then connect."
+            } else {
+                try await adbWirelessClient.connect(address: adbConnectionAddress)
+                adbWirelessStatusMessage = "Paired and connected. Go to USB Transfer and refresh devices."
+            }
         } catch {
             adbWirelessStatusMessage = error.localizedDescription
         }
@@ -223,6 +234,20 @@ final class WirelessTransferStore {
                 self?.stopBrowserSession()
                 self?.browserStatusMessage = "Browser Transfer session stopped after 30 minutes."
             }
+        }
+    }
+
+    private func deleteGeneratedArchives(for items: [SharedDownloadItem]? = nil) {
+        let urlsToDelete: Set<URL>
+        if let items {
+            urlsToDelete = Set(items.map(\.url)).intersection(generatedArchiveURLs)
+        } else {
+            urlsToDelete = generatedArchiveURLs
+        }
+
+        urlsToDelete.forEach { url in
+            try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            generatedArchiveURLs.remove(url)
         }
     }
 
