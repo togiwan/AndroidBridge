@@ -11,6 +11,7 @@ final class WirelessTransferStore {
     var browserURL: URL?
     var browserStatusMessage = "Start a Browser Transfer session to send files over Wi-Fi."
     var sharedItems: [SharedDownloadItem] = []
+    var pendingFolderArchiveNames: [String] = []
     var receivedUploads: [ReceivedUploadRecord] = []
     var adbWirelessStatusMessage = "Scan for wireless debugging devices or connect manually."
     var adbPairingAddress = ""
@@ -36,6 +37,7 @@ final class WirelessTransferStore {
         let session = WirelessTransferSession(receiveFolder: receiveFolder)
         browserSession = session
         sharedItems = []
+        pendingFolderArchiveNames = []
         receivedUploads = []
 
         do {
@@ -63,6 +65,7 @@ final class WirelessTransferStore {
         browserSession = nil
         browserURL = nil
         sharedItems = []
+        pendingFolderArchiveNames = []
         receivedUploads = []
         browserStatusMessage = "Browser Transfer session stopped."
     }
@@ -110,11 +113,13 @@ final class WirelessTransferStore {
         }
 
         let selectedURLs = panel.urls
-        browserStatusMessage = "Preparing folder ZIP archives..."
+        pendingFolderArchiveNames.append(contentsOf: selectedURLs.map(\.lastPathComponent))
+        browserStatusMessage = selectedURLs.count == 1
+            ? "Preparing \(selectedURLs[0].lastPathComponent) as a ZIP archive..."
+            : "Preparing \(selectedURLs.count) folder ZIP archives..."
 
-        Task {
-            var items: [SharedDownloadItem] = []
-
+        Task { [selectedURLs, session] in
+            var preparedCount = 0
             for url in selectedURLs {
                 let folderItem = SharedDownloadItem(url: url, kind: .folder, byteCount: nil)
                 do {
@@ -125,19 +130,26 @@ final class WirelessTransferStore {
                         kind: .file,
                         byteCount: fileSize(archiveURL)
                     )
+
+                    guard browserSession === session else {
+                        try? FileManager.default.removeItem(at: archiveURL.deletingLastPathComponent())
+                        return
+                    }
+
                     generatedArchiveURLs.insert(archiveURL)
-                    items.append(archiveItem)
+                    session.addSharedItems([archiveItem])
+                    sharedItems = session.sharedItems
+                    preparedCount += 1
+                    removePendingFolderArchiveName(url.lastPathComponent)
+                    browserStatusMessage = "Prepared \(archiveItem.name). Refresh the phone page to see it."
                 } catch {
+                    removePendingFolderArchiveName(url.lastPathComponent)
                     browserStatusMessage = "Could not prepare \(url.lastPathComponent): \(error.localizedDescription)"
                 }
             }
 
-            session.addSharedItems(items)
-            sharedItems = session.sharedItems
-            if !items.isEmpty {
-                browserStatusMessage = items.count == 1
-                    ? "Prepared \(items[0].name). Refresh the phone page to see it."
-                    : "Prepared \(items.count) folder ZIP archives. Refresh the phone page to see them."
+            if preparedCount > 1 {
+                browserStatusMessage = "Prepared \(preparedCount) folder ZIP archives. Refresh the phone page to see them."
             }
         }
     }
@@ -265,6 +277,13 @@ final class WirelessTransferStore {
             try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
             generatedArchiveURLs.remove(url)
         }
+    }
+
+    private func removePendingFolderArchiveName(_ name: String) {
+        guard let index = pendingFolderArchiveNames.firstIndex(of: name) else {
+            return
+        }
+        pendingFolderArchiveNames.remove(at: index)
     }
 
     private func pickReceiveFolder() -> URL? {

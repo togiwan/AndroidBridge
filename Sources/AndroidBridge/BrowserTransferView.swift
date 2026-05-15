@@ -106,6 +106,19 @@ struct BrowserTransferView: View {
                 }
                 .frame(minHeight: 180)
             }
+
+            if !store.pendingFolderArchiveNames.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Preparing ZIP")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    ForEach(store.pendingFolderArchiveNames, id: \.self) { name in
+                        Label(name, systemImage: "archivebox")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 
