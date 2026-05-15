@@ -6,10 +6,10 @@ public final class WirelessHTTPServer: @unchecked Sendable {
     public typealias UploadHandler = @Sendable (_ filename: String, _ data: Data) -> Void
 
     public struct Configuration: Sendable {
-        public let port: UInt16
+        public let port: UInt16?
         public let maximumRequestBytes: Int
 
-        public init(port: UInt16 = 8123, maximumRequestBytes: Int = 512 * 1_024 * 1_024) {
+        public init(port: UInt16? = nil, maximumRequestBytes: Int = 512 * 1_024 * 1_024) {
             self.port = port
             self.maximumRequestBytes = maximumRequestBytes
         }
@@ -32,7 +32,14 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         self.session = session
         resetPINAttempts()
         let parameters = NWParameters.tcp
-        let listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: configuration.port)!)
+        let listenerPort: NWEndpoint.Port
+        if let configuredPort = configuration.port {
+            listenerPort = NWEndpoint.Port(rawValue: configuredPort)!
+        } else {
+            listenerPort = .any
+        }
+
+        let listener = try NWListener(using: parameters, on: listenerPort)
         self.listener = listener
 
         listener.newConnectionHandler = { [weak self] connection in
@@ -40,7 +47,8 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         }
         listener.start(queue: queue)
 
-        return URL(string: "http://\(Self.bestLocalAddress()):\(configuration.port)/\(session.token.urlToken)")!
+        let assignedPort = listener.port?.rawValue ?? configuration.port ?? 8123
+        return URL(string: "http://\(Self.bestLocalAddress()):\(assignedPort)/\(session.token.urlToken)")!
     }
 
     public func stop() {
@@ -119,7 +127,8 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         let firstLine = header.components(separatedBy: "\r\n").first ?? ""
         let parts = firstLine.split(separator: " ")
         let method = parts.first.map(String.init) ?? "GET"
-        let path = parts.count >= 2 ? String(parts[1]) : "/"
+        let rawPath = parts.count >= 2 ? String(parts[1]) : "/"
+        let path = rawPath.components(separatedBy: "?").first ?? rawPath
         let tokenPath = "/\(session.token.urlToken)"
 
         guard path == tokenPath || path.hasPrefix("\(tokenPath)/") else {
