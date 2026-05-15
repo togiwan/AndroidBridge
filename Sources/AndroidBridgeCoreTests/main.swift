@@ -195,6 +195,57 @@ func uploadSelectionSummaryDescribesSingleAndMultipleURLs() {
     check(expectEqual(LocalUploadSelectionSummary.completedMessage(for: [fileURL, folderURL], remotePath: "/sdcard/Download"), "Uploaded 2 items to /sdcard/Download.", "multi upload completion message"))
 }
 
+func wirelessTokenCreatesUsableURLTokenAndPIN() {
+    let token = WirelessTransferToken(urlToken: "abcdef1234567890", pin: "123456")
+
+    check(expectEqual(token.urlToken, "abcdef1234567890", "wireless token keeps url token"))
+    check(expectEqual(token.pin, "123456", "wireless token keeps pin"))
+    check(expectEqual(WirelessTransferToken.isValidPIN("123456"), true, "six digit pin is valid"))
+    check(expectEqual(WirelessTransferToken.isValidPIN("12345"), false, "short pin is invalid"))
+    check(expectEqual(WirelessTransferToken.isValidPIN("abcdef"), false, "non numeric pin is invalid"))
+}
+
+func sharedDownloadItemUsesFriendlyMetadata() {
+    let fileURL = URL(fileURLWithPath: "/Users/me/Desktop/photo.jpg")
+    let folderURL = URL(fileURLWithPath: "/Users/me/Desktop/Camera", isDirectory: true)
+
+    let file = SharedDownloadItem(url: fileURL, kind: .file, byteCount: 1024)
+    let folder = SharedDownloadItem(url: folderURL, kind: .folder, byteCount: nil)
+
+    check(expectEqual(file.name, "photo.jpg", "file shared item name"))
+    check(expectEqual(file.downloadName, "photo.jpg", "file download name"))
+    check(expectEqual(folder.name, "Camera", "folder shared item name"))
+    check(expectEqual(folder.downloadName, "Camera.zip", "folder download name"))
+}
+
+func uploadDestinationAutoRenamesCollisionsInsideReceiveFolder() {
+    let receiveFolder = URL(fileURLWithPath: "/tmp/AndroidBridgeReceive", isDirectory: true)
+    let existingNames: Set<String> = ["photo.jpg", "photo 2.jpg"]
+
+    let destination = WirelessUploadDestination.destination(
+        originalFilename: "photo.jpg",
+        receiveFolder: receiveFolder,
+        existingFilenames: existingNames
+    )
+
+    check(expectEqual(destination.lastPathComponent, "photo 3.jpg", "upload collision is auto-renamed"))
+    check(expectEqual(destination.deletingLastPathComponent().path, receiveFolder.path, "upload stays in receive folder"))
+}
+
+func wirelessSessionAddsAndClearsSharedItems() {
+    let session = WirelessTransferSession(
+        token: WirelessTransferToken(urlToken: "abcdef1234567890", pin: "123456"),
+        receiveFolder: URL(fileURLWithPath: "/tmp/AndroidBridgeReceive", isDirectory: true)
+    )
+    let fileURL = URL(fileURLWithPath: "/Users/me/Desktop/photo.jpg")
+
+    session.addSharedItems([SharedDownloadItem(url: fileURL, kind: .file, byteCount: 1024)])
+    check(expectEqual(session.sharedItems.count, 1, "session adds shared item"))
+
+    session.clearSharedItems()
+    check(expectEqual(session.sharedItems.isEmpty, true, "session clears shared items"))
+}
+
 @MainActor
 func commandFailureMapsUnauthorizedDeviceToHelpfulMessage() async {
     let runner = FakeProcessRunner(results: [
@@ -343,6 +394,10 @@ previewDestinationUsesDedicatedTemporaryFolder()
 downloadDestinationUsesChosenFolderAndItemName()
 selectionSummaryDescribesSingleAndMultipleItems()
 uploadSelectionSummaryDescribesSingleAndMultipleURLs()
+wirelessTokenCreatesUsableURLTokenAndPIN()
+sharedDownloadItemUsesFriendlyMetadata()
+uploadDestinationAutoRenamesCollisionsInsideReceiveFolder()
+wirelessSessionAddsAndClearsSharedItems()
 await commandFailureMapsUnauthorizedDeviceToHelpfulMessage()
 try await pushStreamsProgressUpdates()
 await processRunnerTerminatesProcessWhenTaskIsCancelled()
