@@ -32,14 +32,7 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         self.session = session
         resetPINAttempts()
         let parameters = NWParameters.tcp
-        let listenerPort: NWEndpoint.Port
-        if let configuredPort = configuration.port {
-            listenerPort = NWEndpoint.Port(rawValue: configuredPort)!
-        } else {
-            listenerPort = .any
-        }
-
-        let listener = try NWListener(using: parameters, on: listenerPort)
+        let (listener, assignedPort) = try createListener(parameters: parameters)
         self.listener = listener
 
         listener.newConnectionHandler = { [weak self] connection in
@@ -47,8 +40,32 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         }
         listener.start(queue: queue)
 
-        let assignedPort = listener.port?.rawValue ?? configuration.port ?? 8123
         return URL(string: "http://\(Self.bestLocalAddress()):\(assignedPort)/\(session.token.urlToken)")!
+    }
+
+    private func createListener(parameters: NWParameters) throws -> (NWListener, UInt16) {
+        let portsToTry: [UInt16]
+        if let configuredPort = configuration.port {
+            portsToTry = [configuredPort]
+        } else {
+            portsToTry = [8123] + Array(49152...49176)
+        }
+
+        var lastError: Error?
+
+        for port in portsToTry {
+            guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+                continue
+            }
+
+            do {
+                return (try NWListener(using: parameters, on: nwPort), port)
+            } catch {
+                lastError = error
+            }
+        }
+
+        throw lastError ?? POSIXError(.EADDRINUSE)
     }
 
     public func stop() {
