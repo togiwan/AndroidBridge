@@ -30,6 +30,11 @@ final class WirelessTransferStore {
 
         do {
             browserURL = try browserServer.start(session: session)
+            browserServer.setUploadHandler { [weak self] filename, data in
+                Task { @MainActor in
+                    self?.saveUploadedFile(filename: filename, data: data)
+                }
+            }
             browserStatusMessage = "Browser Transfer session is ready."
         } catch {
             browserSession = nil
@@ -39,6 +44,7 @@ final class WirelessTransferStore {
     }
 
     func stopBrowserSession() {
+        browserServer.setUploadHandler(nil)
         browserServer.stop()
         browserSession = nil
         browserURL = nil
@@ -104,6 +110,30 @@ final class WirelessTransferStore {
     func clearSharedItems() {
         browserSession?.clearSharedItems()
         sharedItems = []
+    }
+
+    private func saveUploadedFile(filename: String, data: Data) {
+        guard let session = browserSession else {
+            return
+        }
+
+        do {
+            try FileManager.default.createDirectory(
+                at: session.receiveFolder,
+                withIntermediateDirectories: true
+            )
+
+            let existing = Set((try? FileManager.default.contentsOfDirectory(atPath: session.receiveFolder.path)) ?? [])
+            let destination = WirelessUploadDestination.destination(
+                originalFilename: filename,
+                receiveFolder: session.receiveFolder,
+                existingFilenames: existing
+            )
+            try data.write(to: destination, options: .atomic)
+            browserStatusMessage = "Received \(destination.lastPathComponent)."
+        } catch {
+            browserStatusMessage = "Could not save upload: \(error.localizedDescription)"
+        }
     }
 
     private func pickReceiveFolder() -> URL? {
