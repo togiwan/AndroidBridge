@@ -4,20 +4,19 @@
 ![Platform](https://img.shields.io/badge/macOS-14%2B-blue)
 ![License](https://img.shields.io/github/license/togiwan/AndroidBridge)
 
-AndroidBridge is a small, free, native macOS app for transferring files between a Mac and an Android phone over USB using ADB.
+AndroidBridge is a small, free, native macOS app for transferring files between a Mac and an Android phone over USB or Wi-Fi.
 
-It is intentionally simple: connect a phone, browse Android folders, download files to a Mac folder you choose, and upload files or folders back to the current Android folder.
+It is intentionally simple: connect a phone, browse Android folders, download files to a Mac folder you choose, and upload files or folders back to the current Android folder. For quick wireless sharing, start Browser Transfer and scan a QR code from your Android phone with no Android app install required.
 
 ![AndroidBridge screenshot](assets/androidbridge-screenshot.png)
 
-## What's New In 1.1.0
+## What's New In 1.2.0
 
-- Upload multiple Mac files or folders in one action
-- Select and download multiple Android files or folders at once
-- Choose the Mac folder for each download instead of always using Downloads
-- Cancel long-running transfers from the toolbar or status bar
-- See upload progress, download progress, elapsed time, and ETA where available
-- Get clearer ADB error messages for unauthorized, offline, missing, or permission-denied devices and files
+- Adds Wireless Transfer
+- Transfers files wirelessly through an Android browser with no Android app required
+- Receives phone uploads into a Mac folder you choose
+- Shares Mac files and folder ZIPs to Android browsers
+- Supports ADB Wireless for full file browser access over Wi-Fi
 
 ## Install
 
@@ -44,6 +43,10 @@ This free release is ad-hoc signed but not notarized. If macOS blocks the first 
 
 - Lists Android devices connected over USB
 - Browses Android folders through ADB
+- Transfers files wirelessly through an Android browser with no Android app required
+- Shares Mac files or folders to a phone over the local network
+- Receives phone uploads into a Mac folder you choose
+- Supports ADB Wireless for full file browser access over Wi-Fi
 - Selects one or more Android files or folders at once
 - Downloads files and folders to a Mac folder you choose
 - Uploads one or more Mac files or folders to the current Android folder
@@ -56,9 +59,11 @@ This free release is ad-hoc signed but not notarized. If macOS blocks the first 
 ## Requirements
 
 - macOS 14 or later
-- Android SDK Platform-Tools, including `adb`
-- An Android phone with USB debugging enabled
-- A USB cable that supports data transfer
+- For Browser Transfer, a Mac and Android phone on the same local network
+- For USB Transfer, Android SDK Platform-Tools, including `adb`
+- For USB Transfer, an Android phone with USB debugging enabled
+- For USB Transfer, a USB cable that supports data transfer
+- For ADB Wireless, Android SDK Platform-Tools and Android Wireless debugging
 
 ## Install ADB
 
