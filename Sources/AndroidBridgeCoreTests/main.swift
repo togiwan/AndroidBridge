@@ -262,6 +262,16 @@ func wirelessHTMLRendererEscapesNamesAndShowsActions() {
     check(expectEqual(html.contains("/download/11111111-1111-1111-1111-111111111111"), true, "html links shared item"))
 }
 
+func wirelessZipArchiveUsesFolderDownloadName() {
+    let item = SharedDownloadItem(
+        url: URL(fileURLWithPath: "/Users/me/Desktop/Camera", isDirectory: true),
+        kind: .folder,
+        byteCount: nil
+    )
+
+    check(expectEqual(WirelessZipArchive.archiveFilename(for: item), "Camera.zip", "folder archive filename"))
+}
+
 @MainActor
 func commandFailureMapsUnauthorizedDeviceToHelpfulMessage() async {
     let runner = FakeProcessRunner(results: [
@@ -415,6 +425,7 @@ sharedDownloadItemUsesFriendlyMetadata()
 uploadDestinationAutoRenamesCollisionsInsideReceiveFolder()
 wirelessSessionAddsAndClearsSharedItems()
 wirelessHTMLRendererEscapesNamesAndShowsActions()
+wirelessZipArchiveUsesFolderDownloadName()
 await commandFailureMapsUnauthorizedDeviceToHelpfulMessage()
 try await pushStreamsProgressUpdates()
 await processRunnerTerminatesProcessWhenTaskIsCancelled()

@@ -91,11 +91,34 @@ final class WirelessTransferStore {
             return
         }
 
-        let items = panel.urls.map { url in
-            SharedDownloadItem(url: url, kind: .folder, byteCount: nil)
+        let selectedURLs = panel.urls
+        browserStatusMessage = "Preparing folder ZIP archives..."
+
+        Task {
+            var items: [SharedDownloadItem] = []
+
+            for url in selectedURLs {
+                let folderItem = SharedDownloadItem(url: url, kind: .folder, byteCount: nil)
+                do {
+                    let archiveURL = try await WirelessZipArchive.createArchive(for: folderItem)
+                    let archiveItem = SharedDownloadItem(
+                        id: folderItem.id,
+                        url: archiveURL,
+                        kind: .file,
+                        byteCount: fileSize(archiveURL)
+                    )
+                    items.append(archiveItem)
+                } catch {
+                    browserStatusMessage = "Could not prepare \(url.lastPathComponent): \(error.localizedDescription)"
+                }
+            }
+
+            session.addSharedItems(items)
+            sharedItems = session.sharedItems
+            if !items.isEmpty {
+                browserStatusMessage = "Prepared \(items.count) folder ZIP archive(s)."
+            }
         }
-        session.addSharedItems(items)
-        sharedItems = session.sharedItems
     }
 
     func removeSharedItems(ids: Set<SharedDownloadItem.ID>) {

@@ -117,7 +117,7 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         let method = parts.first.map(String.init) ?? "GET"
         let path = parts.count >= 2 ? String(parts[1]) : "/"
 
-        guard path.contains(session.token.urlToken) || path == "/" || path == "/upload" else {
+        guard path.contains(session.token.urlToken) || path == "/" || path == "/upload" || path.hasPrefix("/download/") else {
             return httpResponse(status: "404 Not Found", body: "Session not found")
         }
 
@@ -125,8 +125,45 @@ public final class WirelessHTTPServer: @unchecked Sendable {
             return handleUpload(header: header, body: body)
         }
 
+        if path.hasPrefix("/download/") {
+            return handleDownload(path: path, session: session)
+        }
+
         let html = WirelessHTMLRenderer.pageHTML(sharedItems: session.sharedItems, authenticated: true)
         return httpResponse(status: "200 OK", body: html, contentType: "text/html; charset=utf-8")
+    }
+
+    private func handleDownload(path: String, session: WirelessTransferSession) -> Data {
+        let idString = path.replacingOccurrences(of: "/download/", with: "")
+        guard let id = UUID(uuidString: idString),
+              let item = session.sharedItem(id: id) else {
+            return httpResponse(status: "404 Not Found", body: "Shared item not found")
+        }
+
+        switch item.kind {
+        case .file:
+            return fileResponse(url: item.url, downloadName: item.downloadName)
+        case .folder:
+            return httpResponse(status: "409 Conflict", body: "Folder ZIP is being prepared. Refresh and try again.")
+        }
+    }
+
+    private func fileResponse(url: URL, downloadName: String) -> Data {
+        guard let data = try? Data(contentsOf: url) else {
+            return httpResponse(status: "404 Not Found", body: "File not found")
+        }
+
+        let safeName = downloadName.replacingOccurrences(of: "\"", with: "")
+        let header = """
+        HTTP/1.1 200 OK\r
+        Content-Type: application/octet-stream\r
+        Content-Disposition: attachment; filename="\(safeName)"\r
+        Content-Length: \(data.count)\r
+        Connection: close\r
+        \r
+
+        """
+        return Data(header.utf8) + data
     }
 
     private func handleUpload(header: String, body: Data) -> Data {
