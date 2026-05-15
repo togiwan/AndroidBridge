@@ -12,8 +12,12 @@ final class WirelessTransferStore {
     var browserStatusMessage = "Start a Browser Transfer session to send files over Wi-Fi."
     var sharedItems: [SharedDownloadItem] = []
     var adbWirelessStatusMessage = "Scan for wireless debugging devices or connect manually."
+    var adbPairingAddress = ""
+    var adbPairingCode = ""
+    var adbConnectionAddress = ""
 
     private let browserServer = WirelessHTTPServer()
+    private let adbWirelessClient = ADBWirelessClient()
 
     var isBrowserSessionRunning: Bool {
         browserSession != nil
@@ -133,6 +137,33 @@ final class WirelessTransferStore {
     func clearSharedItems() {
         browserSession?.clearSharedItems()
         sharedItems = []
+    }
+
+    func pairADBWireless() async {
+        do {
+            try await adbWirelessClient.pair(address: adbPairingAddress, code: adbPairingCode)
+            adbWirelessStatusMessage = "Paired. Connecting next."
+        } catch {
+            adbWirelessStatusMessage = error.localizedDescription
+        }
+    }
+
+    func connectADBWireless() async {
+        do {
+            try await adbWirelessClient.connect(address: adbConnectionAddress)
+            adbWirelessStatusMessage = "Connected. Go to USB Transfer and refresh devices."
+        } catch {
+            adbWirelessStatusMessage = error.localizedDescription
+        }
+    }
+
+    func disconnectADBWireless() async {
+        do {
+            try await adbWirelessClient.disconnect(address: adbConnectionAddress)
+            adbWirelessStatusMessage = "Disconnected."
+        } catch {
+            adbWirelessStatusMessage = error.localizedDescription
+        }
     }
 
     private func saveUploadedFile(filename: String, data: Data) {

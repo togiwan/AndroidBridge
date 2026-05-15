@@ -327,6 +327,24 @@ func pushStreamsProgressUpdates() async throws {
 }
 
 @MainActor
+func adbWirelessPairAndConnectUseExpectedCommands() async throws {
+    let runner = FakeProcessRunner(results: [
+        ProcessResult(stdout: "Successfully paired to 192.168.1.20:37123\n", stderr: "", exitCode: 0),
+        ProcessResult(stdout: "connected to 192.168.1.20:40125\n", stderr: "", exitCode: 0)
+    ])
+    let client = ADBWirelessClient(command: ADBCommand(executable: "/usr/bin/adb"), runner: runner)
+
+    try await client.pair(address: "192.168.1.20:37123", code: "123456")
+    try await client.connect(address: "192.168.1.20:40125")
+
+    let runs = await runner.recordedRuns
+    check(expectEqual(runs.map(\.arguments), [
+        ["pair", "192.168.1.20:37123", "123456"],
+        ["connect", "192.168.1.20:40125"]
+    ], "adb wireless pair/connect arguments"))
+}
+
+@MainActor
 func processRunnerTerminatesProcessWhenTaskIsCancelled() async {
     let runner = FoundationProcessRunner()
     let startedAt = Date()
@@ -428,6 +446,7 @@ wirelessHTMLRendererEscapesNamesAndShowsActions()
 wirelessZipArchiveUsesFolderDownloadName()
 await commandFailureMapsUnauthorizedDeviceToHelpfulMessage()
 try await pushStreamsProgressUpdates()
+try await adbWirelessPairAndConnectUseExpectedCommands()
 await processRunnerTerminatesProcessWhenTaskIsCancelled()
 
 if failures > 0 {

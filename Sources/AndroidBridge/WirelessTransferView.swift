@@ -19,11 +19,7 @@ struct WirelessTransferView: View {
             case .browser:
                 BrowserTransferView(store: store)
             case .adbWireless:
-                ContentUnavailableView(
-                    "ADB Wireless",
-                    systemImage: "antenna.radiowaves.left.and.right",
-                    description: Text("Wireless debugging pairing will appear here.")
-                )
+                ADBWirelessView(store: store)
             }
         }
     }
