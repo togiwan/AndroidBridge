@@ -2,8 +2,39 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var store: AndroidBridgeStore
+    @State private var transferMode: TransferMode = .usb
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Transfer Mode", selection: $transferMode) {
+                ForEach(TransferMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding([.horizontal, .top], 14)
+            .padding(.bottom, 10)
+
+            Divider()
+
+            Group {
+                switch transferMode {
+                case .usb:
+                    usbTransferView
+                case .wireless:
+                    WirelessTransferView()
+                }
+            }
+        }
+        .sheet(isPresented: $store.isShowingSetupGuide) {
+            SetupGuideView()
+        }
+        .sheet(isPresented: $store.isShowingDonation) {
+            DonationView()
+        }
+    }
+
+    private var usbTransferView: some View {
         NavigationSplitView {
             DeviceSidebarView(store: store)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260)
@@ -64,12 +95,6 @@ struct ContentView: View {
                 }
                 .help("Donate")
             }
-        }
-        .sheet(isPresented: $store.isShowingSetupGuide) {
-            SetupGuideView()
-        }
-        .sheet(isPresented: $store.isShowingDonation) {
-            DonationView()
         }
     }
 }
