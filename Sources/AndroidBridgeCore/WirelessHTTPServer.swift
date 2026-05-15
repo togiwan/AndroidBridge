@@ -117,20 +117,60 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         let method = parts.first.map(String.init) ?? "GET"
         let path = parts.count >= 2 ? String(parts[1]) : "/"
 
-        guard path.contains(session.token.urlToken) || path == "/" || path == "/upload" || path.hasPrefix("/download/") else {
+        guard path.contains(session.token.urlToken) || path == "/" || path == "/pin" || path == "/upload" || path.hasPrefix("/download/") else {
             return httpResponse(status: "404 Not Found", body: "Session not found")
         }
 
+        if method == "POST", path == "/pin" {
+            return handlePIN(body: body, session: session)
+        }
+
+        let authenticated = isAuthenticated(header: header, session: session)
+
         if method == "POST", path == "/upload" {
+            guard authenticated else {
+                return httpResponse(status: "403 Forbidden", body: "Enter the PIN before uploading files.")
+            }
             return handleUpload(header: header, body: body)
         }
 
         if path.hasPrefix("/download/") {
+            guard authenticated else {
+                return httpResponse(status: "403 Forbidden", body: "Enter the PIN before downloading files.")
+            }
             return handleDownload(path: path, session: session)
         }
 
-        let html = WirelessHTMLRenderer.pageHTML(sharedItems: session.sharedItems, authenticated: true)
+        let html = WirelessHTMLRenderer.pageHTML(sharedItems: session.sharedItems, authenticated: authenticated)
         return httpResponse(status: "200 OK", body: html, contentType: "text/html; charset=utf-8")
+    }
+
+    private func handlePIN(body: Data, session: WirelessTransferSession) -> Data {
+        guard postedPIN(from: body) == session.token.pin else {
+            let html = WirelessHTMLRenderer.pageHTML(sharedItems: session.sharedItems, authenticated: false)
+            return httpResponse(status: "403 Forbidden", body: html, contentType: "text/html; charset=utf-8")
+        }
+
+        return httpRedirect(
+            location: "/\(session.token.urlToken)",
+            headers: ["Set-Cookie: AndroidBridgePIN=\(session.token.urlToken); Path=/; SameSite=Strict"]
+        )
+    }
+
+    private func isAuthenticated(header: String, session: WirelessTransferSession) -> Bool {
+        header.contains("Cookie: AndroidBridgePIN=\(session.token.urlToken)")
+    }
+
+    private func postedPIN(from body: Data) -> String? {
+        guard let bodyString = String(data: body, encoding: .utf8) else {
+            return nil
+        }
+
+        return bodyString
+            .components(separatedBy: "&")
+            .first { $0.hasPrefix("pin=") }?
+            .replacingOccurrences(of: "pin=", with: "")
+            .removingPercentEncoding
     }
 
     private func handleDownload(path: String, session: WirelessTransferSession) -> Data {
@@ -277,13 +317,32 @@ public final class WirelessHTTPServer: @unchecked Sendable {
         return String(suffix[..<end])
     }
 
-    private func httpResponse(status: String, body: String, contentType: String = "text/plain; charset=utf-8") -> Data {
+    private func httpRedirect(location: String, headers: [String] = []) -> Data {
+        let extraHeaders = headers.map { "\($0)\r\n" }.joined()
+        let header = """
+        HTTP/1.1 303 See Other\r
+        Location: \(location)\r
+        \(extraHeaders)Content-Length: 0\r
+        Connection: close\r
+        \r
+
+        """
+        return Data(header.utf8)
+    }
+
+    private func httpResponse(
+        status: String,
+        body: String,
+        contentType: String = "text/plain; charset=utf-8",
+        headers: [String] = []
+    ) -> Data {
         let bodyData = Data(body.utf8)
+        let extraHeaders = headers.map { "\($0)\r\n" }.joined()
         let header = """
         HTTP/1.1 \(status)\r
         Content-Type: \(contentType)\r
         Content-Length: \(bodyData.count)\r
-        Connection: close\r
+        \(extraHeaders)Connection: close\r
         \r
 
         """

@@ -20,6 +20,7 @@ final class WirelessTransferStore {
     private let browserServer = WirelessHTTPServer()
     private let adbWirelessClient = ADBWirelessClient()
     private let adbDiscovery = ADBWirelessDiscovery()
+    private var browserTimeoutTask: Task<Void, Never>?
 
     var isBrowserSessionRunning: Bool {
         browserSession != nil
@@ -41,6 +42,7 @@ final class WirelessTransferStore {
                     self?.saveUploadedFile(filename: filename, data: data)
                 }
             }
+            restartBrowserTimeout()
             browserStatusMessage = "Browser Transfer session is ready."
         } catch {
             browserSession = nil
@@ -50,6 +52,8 @@ final class WirelessTransferStore {
     }
 
     func stopBrowserSession() {
+        browserTimeoutTask?.cancel()
+        browserTimeoutTask = nil
         browserServer.setUploadHandler(nil)
         browserServer.stop()
         browserSession = nil
@@ -204,9 +208,21 @@ final class WirelessTransferStore {
                 existingFilenames: existing
             )
             try data.write(to: destination, options: .atomic)
+            restartBrowserTimeout()
             browserStatusMessage = "Received \(destination.lastPathComponent)."
         } catch {
             browserStatusMessage = "Could not save upload: \(error.localizedDescription)"
+        }
+    }
+
+    private func restartBrowserTimeout() {
+        browserTimeoutTask?.cancel()
+        browserTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(30 * 60))
+            await MainActor.run {
+                self?.stopBrowserSession()
+                self?.browserStatusMessage = "Browser Transfer session stopped after 30 minutes."
+            }
         }
     }
 
